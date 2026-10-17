@@ -158,10 +158,12 @@ function createServer() {
         "Type any idea or question and find every live prediction market for it across Polymarket, Kalshi, Limitless and Manifold, " +
         "ranked by match, venue trust and volume, with the best YES and NO prices. If nothing matches, returns where to propose the market " +
         "plus a ready-to-send proposal. Next step: prepare_bet on a chosen result. " +
-        "Use ONLY when the user asks about prediction markets, odds, betting or trading on an outcome " +
+        "Use when EITHER (1) the user mentions Market Radar or PayBox together with a topic or question " +
+        "(e.g. \"use Market Radar: will the Fed cut rates in December?\", \"check PayBox for Arsenal odds\") — always call it then; " +
+        "OR (2) the user asks about prediction markets, odds, betting or trading on an outcome " +
         "(e.g. \"is there a market for...\", \"odds on...\", \"I want to bet on...\"). " +
-        "Do NOT use to answer general news or factual questions such as \"will the Fed cut rates?\"; answer those normally " +
-        "and at most offer to check prediction markets if the user wants.",
+        "Otherwise do NOT use it for general news or factual questions such as a bare \"will the Fed cut rates?\"; answer those normally " +
+        "and at most offer to check prediction markets with Market Radar.",
       inputSchema: z
         .object({
           query: z.string().min(2).max(200).describe("Plain words are fine, e.g. \"prediction markets for nigeria 2027 election\" or \"Bitcoin above 150k this year\""),

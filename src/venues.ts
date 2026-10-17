@@ -248,7 +248,7 @@ export const isSpecific = (t: string) => !GENERIC.has(t) && !/^\d+$/.test(t);
 const FILLER = new Set(
   ("prediction predictions predict market markets bet bets betting wager wagers odds using use via through paybox wallet " +
     "find show me give get list search look looking any are there is i im i'm want wanna can you please on about for my " +
-    "place trade trading available live all best top some polymarket kalshi limitless manifold with a an to").split(" "),
+    "place trade trading available live all best top some polymarket kalshi limitless manifold with a an to radar check ask question").split(" "),
 );
 
 // Strips filler words but keeps the user's casing, so names like "Tinubu" still read as names.
