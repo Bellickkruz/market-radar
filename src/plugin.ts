@@ -114,6 +114,11 @@ function draftProposal(idea: string, closeDate?: string) {
   };
 }
 
+// World (PayBox's in-wallet Solana market) is reachable only through PayBox, so the agent checks it.
+const worldNextStep = (topic: string) =>
+  `To bet with the PayBox wallet: search the PayBox World plugin (world_search, q "${topic}"). If World lists the same market, ` +
+  `buy it there with prepare_bet's steps; otherwise share the market links above so the user can bet on that venue.`;
+
 async function scout(topic: string, venues: readonly Venue[]) {
   // Venue search is literal, so also search the single most distinctive word: a name if
   // the user typed one ("Tinubu"), else the longest specific word ("nigeria").
@@ -182,6 +187,7 @@ function createServer() {
         no_market: z
           .object({ proposal: z.object({ question: z.string(), resolution_criteria: z.string(), close_date: z.string(), pitch: z.string() }), platforms: z.array(platformSchema) })
           .nullable(),
+        next_step: z.string(),
       }),
       annotations: readOnly,
     },
@@ -208,11 +214,13 @@ function createServer() {
         ? ranked.map(
             (m, i) =>
               `${i + 1}. [${m.venue_name}${m.trust === "play_money" ? ", play money" : ""}] ${m.title} — YES ${m.yes_price ?? "?"} / NO ${m.no_price ?? "?"}` +
-              `${m.volume != null ? `, vol ${m.volume.toLocaleString("en-US")} ${m.volume_unit}` : ""} (ref ${m.market_ref})`,
+              `${m.volume != null ? `, vol ${m.volume.toLocaleString("en-US")} ${m.volume_unit}` : ""}\n   ${m.url} (ref ${m.market_ref})`,
           )
         : [`No live market found for "${topic}". Draft proposal: ${noMarket!.proposal.question}`, ...PROPOSAL_PLATFORMS.map((p) => `- ${p.venue}: ${p.how_to_propose}`)];
       const failed = venueStatus.filter((v) => !v.ok).map((v) => v.venue);
       if (failed.length) lines.push(`Could not reach: ${failed.join(", ")}.`);
+      const nextStep = worldNextStep(topic);
+      lines.push("", nextStep);
       if (topic !== query.trim()) lines.unshift(`Searched for: "${topic}"`);
       return textResult(lines.join("\n"), {
         query,
@@ -223,6 +231,7 @@ function createServer() {
         best_no: best("no_price"),
         venues_checked: venueStatus,
         no_market: noMarket,
+        next_step: nextStep,
       });
     },
   );
@@ -251,7 +260,7 @@ function createServer() {
         estimated_shares: nullableNum,
         payout_if_win_usd: nullableNum,
         profit_if_win_usd: nullableNum,
-        route: z.enum(["paybox_world", "venue_link", "play_money_link"]),
+        route: z.enum(["world_or_venue_link", "play_money_link"]),
         paybox_steps: z.array(z.string()),
         venue_url: z.string(),
         warnings: z.array(z.string()),
@@ -271,28 +280,24 @@ function createServer() {
       if (price != null && (price < 0.03 || price > 0.97)) warnings.push("Extreme price: thin upside or a long shot. Double-check before betting.");
       if (m.closes_at && Date.parse(m.closes_at) - Date.now() < 3_600_000) warnings.push("Market closes within an hour.");
       warnings.push("Estimates use the latest quoted price; the fill price can differ with order-book depth and fees.");
-      const route = venue === "manifold" ? "play_money_link" : venue === "kalshi" ? "paybox_world" : "venue_link";
+      const route = venue === "manifold" ? "play_money_link" : "world_or_venue_link";
       const unit = venue === "manifold" ? "M" : "$";
-      const worldSteps = [
-              `discover_plugins with query "World" (enable it at https://app.paybox.sh/plugins if disabled).`,
-              `Call World's search tool with query "${m.event_title ?? m.title}" and pick the market with the same question and close date.`,
-              `Call World's buy-outcome tool for the ${side.toUpperCase()} outcome with ${amount_usd} USD from the user's Solana wallet; the user approves with their passkey.`,
-              `Poll the returned PayBox request ID until it succeeds before reporting the bet as placed.`,
-              `If World does not list this market, give the user the venue link instead: ${m.url}`,
-            ];
+      const sizeAtomic = String(Math.round(amount_usd * 1_000_000));
       const steps =
-        route === "paybox_world"
-          ? worldSteps
-          : route === "venue_link"
-            ? [
-                `${VENUES[venue].name} takes bets as off-chain signed orders, which PayBox plugins cannot submit. First check whether World lists the same question:`,
-                ...worldSteps,
-              ]
-            : [`Manifold uses play money; open ${m.url} to bet mana. No PayBox wallet transaction is involved.`];
+        route === "world_or_venue_link"
+          ? [
+              `To bet inside PayBox, use the World plugin (PayBox's in-wallet prediction market on Solana). Enable it at https://app.paybox.sh/plugins if needed.`,
+              `Call world_search with q "${m.event_title ?? m.title}" (try shorter keywords too). Only continue if World lists the SAME question and close date.`,
+              `If it does: confirm the exact market and its ${side.toUpperCase()} mint with world_get_markets, then call world_buy_outcome with that mint and size "${sizeAtomic}" (atomic USDC = ${amount_usd} USD) from the user's Solana wallet; the user approves with their passkey. Poll get_request until it completes.`,
+              `If World does not list it: give the user this ${VENUES[venue].name} link to bet there directly: ${m.url} (${VENUES[venue].name} orders cannot be signed through a PayBox plugin).`,
+            ]
+          : [`Manifold uses play money; open ${m.url} to bet mana. No PayBox wallet transaction is involved.`];
       const text =
         `${side.toUpperCase()} on "${m.title}" (${VENUES[venue].name}) at ${price ?? "?"} → ~${shares ?? "?"} shares for ${unit}${amount_usd}; ` +
-        `pays ~${unit}${payout ?? "?"} if it wins (profit ~${unit}${profit ?? "?"}). Route: ` +
-        (route === "paybox_world" ? "PayBox World plugin (Solana wallet, passkey approval)." : route === "venue_link" ? `World if it lists the same market, else ${m.url}` : `play money at ${m.url}`);
+        `pays ~${unit}${payout ?? "?"} if it wins (profit ~${unit}${profit ?? "?"}).\n` +
+        (route === "world_or_venue_link"
+          ? `Bet in PayBox via World if World lists this market; otherwise bet on ${VENUES[venue].name}: ${m.url}`
+          : `Play money: ${m.url}`);
       return textResult(text, {
         market: shown,
         side,
