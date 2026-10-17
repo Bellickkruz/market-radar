@@ -119,9 +119,12 @@ function kalshiMarket(m: any, series: any): Market | null {
   return {
     venue: "kalshi",
     market_ref: String(m.ticker),
-    title: m.yes_sub_title || m.yes_subtitle
-      ? `${m.title ?? series?.event_title} — ${m.yes_sub_title || m.yes_subtitle}`
-      : String(m.title ?? series?.event_title),
+    title:
+      series?.event_title && /\b(wins|is the result)$/i.test(String(m.title))
+        ? `${series.event_title}: ${m.title}`
+        : m.yes_sub_title || m.yes_subtitle
+          ? `${m.title ?? series?.event_title} — ${m.yes_sub_title || m.yes_subtitle}`
+          : String(m.title ?? series?.event_title),
     event_title: series?.event_title ? [series.event_title, series.event_subtitle].filter(Boolean).join(" ") : null,
     yes_price: round(ask),
     no_price: round(noAsk ?? (bid != null ? 1 - bid : null)),
@@ -227,7 +230,29 @@ export const LOOKUP: Record<Venue, (ref: string) => Promise<Market | null>> = {
 
 // ---- Ranking ---------------------------------------------------------------
 
-const STOP = new Set("a an the will be is are to of in on by for at and or what who when how does do did than this that with before after hit reach above below over under".split(" "));
+const STOP = new Set("a an the will be is are to of in on by for at and or what who when how does do did than this that with before after hit reach above below over under vs v fc".split(" "));
+
+// Common short names that venues spell out in full.
+const ALIASES: Record<string, string> = {
+  psg: "Paris Saint-Germain",
+  barca: "Barcelona",
+  "man utd": "Manchester United",
+  "man united": "Manchester United",
+  "man city": "Manchester City",
+  spurs: "Tottenham",
+  inter: "Inter Milan",
+  bayern: "Bayern Munich",
+  btc: "Bitcoin",
+  eth: "Ethereum",
+};
+
+export function expandAliases(text: string): string {
+  let out = text;
+  for (const [short, full] of Object.entries(ALIASES)) {
+    out = out.replace(new RegExp(`\\b${short}\\b`, "gi"), full);
+  }
+  return out;
+}
 
 export function tokens(text: string): string[] {
   return text
@@ -272,7 +297,14 @@ export function relevance(query: string, market: Market): number {
   const want = [...new Set(tokens(query))];
   if (!want.length) return 0;
   const have = new Set(tokens(`${market.title} ${market.event_title ?? ""}`));
-  const hits = want.filter((t) => have.has(t) || [...have].some((h) => h.length > 3 && t.length > 3 && (h.startsWith(t) || t.startsWith(h))));
+  const matches = (t: string): boolean =>
+    have.has(t) ||
+    [...have].some((h) => h.length > 3 && t.length > 3 && (h.startsWith(t) || t.startsWith(h))) ||
+    (ALIASES[t] != null && tokens(ALIASES[t]).some((a) => have.has(a)));
+  const hits = want.filter(matches);
+  // "PSG vs Barcelona": both sides of a matchup must appear, not just one team.
+  const sides = query.split(/\s+(?:vs\.?|v\.?|versus|against)\s+/i);
+  if (sides.length === 2 && !sides.every((side) => tokens(side).some(matches))) return 0;
   // When the query names something specific (a person, asset, team), at least one such word must match.
   if (want.some(isSpecific) && !hits.some(isSpecific)) return 0;
   const named = names(query).filter(isSpecific);

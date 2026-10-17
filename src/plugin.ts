@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
-import { HOSTS, LOOKUP, SEARCH, VENUES, extractTopic, getJson, iso, isSpecific, names, relevance, score, tokens, type Market, type Venue } from "./venues.js";
+import { HOSTS, LOOKUP, SEARCH, VENUES, expandAliases, extractTopic, getJson, iso, isSpecific, names, relevance, score, tokens, type Market, type Venue } from "./venues.js";
 
 const PROTOCOL_VERSION = "2026-07-28";
 const VENUE_IDS = ["polymarket", "kalshi", "limitless", "manifold"] as const;
@@ -115,16 +115,25 @@ function draftProposal(idea: string, closeDate?: string) {
 }
 
 // World (PayBox's in-wallet Solana market) is reachable only through PayBox, so the agent checks it.
-const worldNextStep = (topic: string) =>
-  `To bet with the PayBox wallet: search the PayBox World plugin (world_search, q "${topic}"). If World lists the same market, ` +
-  `buy it there with prepare_bet's steps; otherwise share the market links above so the user can bet on that venue.`;
+// Venue search is literal, so search the topic, its spelled-out form ("PSG" → "Paris Saint-Germain"),
+// and the single most distinctive word: the longest name typed ("Barcelona"), else the longest specific word.
+function searchTerms(topic: string): string[] {
+  const longestFirst = (list: string[]) => [...list].sort((a, b) => b.length - a.length);
+  const core = longestFirst(names(topic).filter(isSpecific))[0] ?? longestFirst(tokens(topic).filter(isSpecific))[0];
+  return [...new Set([topic, expandAliases(topic), core].filter((q): q is string => !!q && q.length > 1))];
+}
+
+const worldNextStep = (topic: string) => {
+  const [first, ...rest] = searchTerms(topic);
+  return (
+    `To bet with the PayBox wallet: search the PayBox World plugin (world_search, q "${first}"` +
+    `${rest.length ? `; if nothing matches, try ${rest.map((t) => `"${t}"`).join(" or ")}` : ""}). ` +
+    `If World lists the same market, buy it there with prepare_bet's steps; otherwise share the market links above so the user can bet on that venue.`
+  );
+};
 
 async function scout(topic: string, venues: readonly Venue[]) {
-  // Venue search is literal, so also search the single most distinctive word: a name if
-  // the user typed one ("Tinubu"), else the longest specific word ("nigeria").
-  const specific = tokens(topic).filter(isSpecific);
-  const core = names(topic).filter(isSpecific)[0] ?? specific.sort((a, b) => b.length - a.length)[0];
-  const queries = core && core !== topic.toLowerCase() ? [topic, core] : [topic];
+  const queries = searchTerms(topic);
   const settled = await Promise.allSettled(
     venues.map(async (v) => {
       const results = await Promise.allSettled(queries.map((q) => SEARCH[v](q)));
