@@ -157,7 +157,11 @@ function createServer() {
       description:
         "Type any idea or question and find every live prediction market for it across Polymarket, Kalshi, Limitless and Manifold, " +
         "ranked by match, venue trust and volume, with the best YES and NO prices. If nothing matches, returns where to propose the market " +
-        "plus a ready-to-send proposal. Next step: prepare_bet on a chosen result.",
+        "plus a ready-to-send proposal. Next step: prepare_bet on a chosen result. " +
+        "Use ONLY when the user asks about prediction markets, odds, betting or trading on an outcome " +
+        "(e.g. \"is there a market for...\", \"odds on...\", \"I want to bet on...\"). " +
+        "Do NOT use to answer general news or factual questions such as \"will the Fed cut rates?\"; answer those normally " +
+        "and at most offer to check prediction markets if the user wants.",
       inputSchema: z
         .object({
           query: z.string().min(2).max(200).describe("Plain words are fine, e.g. \"prediction markets for nigeria 2027 election\" or \"Bitcoin above 150k this year\""),
@@ -309,7 +313,8 @@ function createServer() {
       title: "Suggest a new market",
       description:
         "For an idea with no live market: drafts a market proposal (question, resolution criteria, close date, pitch) and lists where to propose or create it, " +
-        "including which platforms reward creators.",
+        "including which platforms reward creators. Use only when the user wants to create or propose a market, " +
+        "or after scout_markets found no market and the user wants one.",
       inputSchema: z
         .object({
           idea: z.string().min(3).max(200),
@@ -337,7 +342,8 @@ function createServer() {
       title: "Find liquidity opportunities",
       description:
         "Ranks prediction markets where providing liquidity (two-sided limit orders) earns venue rewards, by daily reward pool. " +
-        "Polymarket liquidity rewards and Limitless daily rewards; optional topic filter.",
+        "Polymarket liquidity rewards and Limitless daily rewards; optional topic filter. " +
+        "Use only when the user asks about providing liquidity, market making or earning maker rewards on prediction markets.",
       inputSchema: z
         .object({
           topic: z.string().min(2).max(100).optional().describe("e.g. \"bitcoin\" or \"election\"; omit for the top pools overall"),
