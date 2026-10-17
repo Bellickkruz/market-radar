@@ -90,7 +90,7 @@ function polymarketMarket(m: any, event: any): Market | null {
 }
 
 export async function searchPolymarket(query: string): Promise<Market[]> {
-  const data = await getJson(`https://${HOSTS.polymarketGamma}/public-search?q=${q(query)}&limit_per_type=10&events_status=active`);
+  const data = await getJson(`https://${HOSTS.polymarketGamma}/public-search?q=${q(query)}&limit_per_type=10&events_status=active&sort=volume&ascending=false`);
   const out: Market[] = [];
   for (const event of data?.events ?? []) {
     if (event.closed) continue;
@@ -122,7 +122,7 @@ function kalshiMarket(m: any, series: any): Market | null {
     title: m.yes_sub_title || m.yes_subtitle
       ? `${m.title ?? series?.event_title} — ${m.yes_sub_title || m.yes_subtitle}`
       : String(m.title ?? series?.event_title),
-    event_title: series?.event_title ?? null,
+    event_title: series?.event_title ? [series.event_title, series.event_subtitle].filter(Boolean).join(" ") : null,
     yes_price: round(ask),
     no_price: round(noAsk ?? (bid != null ? 1 - bid : null)),
     volume: round(num(m.volume) ?? num(series?.total_volume), 0),
@@ -242,14 +242,30 @@ export function tokens(text: string): string[] {
 const GENERIC = new Set(
   "election elections presidential president win wins winner price market next new year game match championship league odds".split(" "),
 );
-const isSpecific = (t: string) => !GENERIC.has(t) && !/^\d+$/.test(t);
+export const isSpecific = (t: string) => !GENERIC.has(t) && !/^\d+$/.test(t);
+
+// Words people wrap around the actual topic ("prediction markets for ... using paybox").
+const FILLER = new Set(
+  ("prediction predictions predict market markets bet bets betting wager wagers odds using use via through paybox wallet " +
+    "find show me give get list search look looking any are there is i im i'm want wanna can you please on about for my " +
+    "place trade trading available live all best top some polymarket kalshi limitless manifold with a an to").split(" "),
+);
+
+// Strips filler words but keeps the user's casing, so names like "Tinubu" still read as names.
+export function extractTopic(query: string): string {
+  const kept = query
+    .split(/\s+/)
+    .filter((w) => w && !FILLER.has(w.toLowerCase().replace(/[^\p{L}\p{N}']/gu, "")));
+  return kept.join(" ").trim() || query.trim();
+}
 
 // Capitalized words after the first ("Davido", "Tinubu") are treated as names the market must mention.
-const names = (query: string) =>
+// The first word is skipped only when it is capitalized because it starts a question ("Will ...").
+const QUESTION_START = /^(will|is|are|who|what|which|when|how|does|do|can|did)$/i;
+export const names = (query: string) =>
   query
     .split(/\s+/)
-    .slice(1)
-    .filter((w) => /^[A-Z][\p{L}'-]+/u.test(w))
+    .filter((w, i) => /^[A-Z][\p{L}'-]+/u.test(w) && !(i === 0 && QUESTION_START.test(w)))
     .flatMap(tokens);
 
 export function relevance(query: string, market: Market): number {
@@ -266,6 +282,8 @@ export function relevance(query: string, market: Market): number {
 
 export function score(query: string, m: Market): number {
   const rel = relevance(query, m);
+  // Matching words in the market's own title beats matching only its parent event's title.
+  const titleRel = relevance(query, { ...m, event_title: null });
   const vol = m.volume ? Math.min(1, Math.log10(m.volume + 1) / 7) * (m.volume_unit === "MANA" ? 0.3 : 1) : 0;
-  return rel * 0.65 + VENUES[m.venue].trustScore * 0.2 + vol * 0.15;
+  return rel * 0.5 + titleRel * 0.2 + VENUES[m.venue].trustScore * 0.15 + vol * 0.15;
 }

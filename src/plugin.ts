@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
-import { HOSTS, LOOKUP, SEARCH, VENUES, getJson, iso, relevance, score, type Market, type Venue } from "./venues.js";
+import { HOSTS, LOOKUP, SEARCH, VENUES, extractTopic, getJson, iso, isSpecific, names, relevance, score, tokens, type Market, type Venue } from "./venues.js";
 
 const PROTOCOL_VERSION = "2026-07-28";
 const VENUE_IDS = ["polymarket", "kalshi", "limitless", "manifold"] as const;
@@ -114,14 +114,27 @@ function draftProposal(idea: string, closeDate?: string) {
   };
 }
 
-async function scout(query: string, venues: readonly Venue[]) {
-  const settled = await Promise.allSettled(venues.map((v) => SEARCH[v](query)));
+async function scout(topic: string, venues: readonly Venue[]) {
+  // Venue search is literal, so also search the single most distinctive word: a name if
+  // the user typed one ("Tinubu"), else the longest specific word ("nigeria").
+  const specific = tokens(topic).filter(isSpecific);
+  const core = names(topic).filter(isSpecific)[0] ?? specific.sort((a, b) => b.length - a.length)[0];
+  const queries = core && core !== topic.toLowerCase() ? [topic, core] : [topic];
+  const settled = await Promise.allSettled(
+    venues.map(async (v) => {
+      const results = await Promise.allSettled(queries.map((q) => SEARCH[v](q)));
+      const ok = results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+      if (!ok.length && results.every((r) => r.status === "rejected")) throw (results[0] as PromiseRejectedResult).reason;
+      const seen = new Set<string>();
+      return ok.filter((m) => !seen.has(m.market_ref) && seen.add(m.market_ref));
+    }),
+  );
   const markets: Market[] = [];
   const venueStatus: { venue: Venue; ok: boolean; found: number; error: string | null }[] = [];
   settled.forEach((r, i) => {
     const venue = venues[i]!;
     if (r.status === "fulfilled") {
-      const relevant = r.value.filter((m) => relevance(query, m) >= 0.5);
+      const relevant = r.value.filter((m) => relevance(topic, m) >= 0.5);
       markets.push(...relevant);
       venueStatus.push({ venue, ok: true, found: relevant.length, error: null });
     } else {
@@ -147,13 +160,14 @@ function createServer() {
         "plus a ready-to-send proposal. Next step: prepare_bet on a chosen result.",
       inputSchema: z
         .object({
-          query: z.string().min(2).max(200).describe("The idea, e.g. \"Bitcoin above 150k this year\""),
+          query: z.string().min(2).max(200).describe("Plain words are fine, e.g. \"prediction markets for nigeria 2027 election\" or \"Bitcoin above 150k this year\""),
           limit: z.number().int().min(1).max(20).default(8).describe("Maximum markets to return"),
           include_play_money: z.boolean().default(true).describe("Include Manifold (play money) as a crowd signal"),
         })
         .strict(),
       outputSchema: z.object({
         query: z.string(),
+        topic: z.string(),
         found: z.number().int(),
         markets: z.array(marketSchema),
         best_yes: marketSchema.nullable(),
@@ -167,24 +181,36 @@ function createServer() {
     },
     async ({ query, limit, include_play_money }) => {
       const venues = VENUE_IDS.filter((v) => include_play_money || v !== "manifold");
-      const { markets, venueStatus } = await scout(query, venues);
-      const ranked = markets.sort((a, b) => score(query, b) - score(query, a)).slice(0, limit).map((m) => present(m, query));
+      const topic = extractTopic(query);
+      const { markets, venueStatus } = await scout(topic, venues);
+      const perEvent = new Map<string, number>();
+      const ranked = markets
+        .sort((a, b) => score(topic, b) - score(topic, a))
+        .filter((m) => {
+          const key = `${m.venue}:${m.event_title ?? m.market_ref}`;
+          perEvent.set(key, (perEvent.get(key) ?? 0) + 1);
+          return perEvent.get(key)! <= 2;
+        })
+        .slice(0, limit)
+        .map((m) => present(m, topic));
       // Best prices only among real-money venues.
       const real = ranked.filter((m) => m.trust !== "play_money");
       const best = (key: "yes_price" | "no_price") =>
         real.filter((m) => m[key] != null && m[key]! > 0).sort((a, b) => a[key]! - b[key]!)[0] ?? null;
-      const noMarket = ranked.length ? null : { proposal: draftProposal(query), platforms: PROPOSAL_PLATFORMS };
+      const noMarket = ranked.length ? null : { proposal: draftProposal(topic), platforms: PROPOSAL_PLATFORMS };
       const lines = ranked.length
         ? ranked.map(
             (m, i) =>
               `${i + 1}. [${m.venue_name}${m.trust === "play_money" ? ", play money" : ""}] ${m.title} — YES ${m.yes_price ?? "?"} / NO ${m.no_price ?? "?"}` +
               `${m.volume != null ? `, vol ${m.volume.toLocaleString("en-US")} ${m.volume_unit}` : ""} (ref ${m.market_ref})`,
           )
-        : [`No live market found for "${query}". Draft proposal: ${noMarket!.proposal.question}`, ...PROPOSAL_PLATFORMS.map((p) => `- ${p.venue}: ${p.how_to_propose}`)];
+        : [`No live market found for "${topic}". Draft proposal: ${noMarket!.proposal.question}`, ...PROPOSAL_PLATFORMS.map((p) => `- ${p.venue}: ${p.how_to_propose}`)];
       const failed = venueStatus.filter((v) => !v.ok).map((v) => v.venue);
       if (failed.length) lines.push(`Could not reach: ${failed.join(", ")}.`);
+      if (topic !== query.trim()) lines.unshift(`Searched for: "${topic}"`);
       return textResult(lines.join("\n"), {
         query,
+        topic,
         found: ranked.length,
         markets: ranked,
         best_yes: best("yes_price"),
