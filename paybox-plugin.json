@@ -1,0 +1,6 @@
+{
+  "tool": "scout_markets",
+  "arguments": {
+    "query": "bitcoin 150k"
+  }
+}
