@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
-import { HOSTS, LOOKUP, SEARCH, VENUES, expandAliases, extractTopic, getJson, iso, isSpecific, names, relevance, score, tokens, type Market, type Venue } from "./venues.js";
+import { HOSTS, LOOKUP, SEARCH, VENUES, expandAliases, extractTopic, getJson, iso, isSpecific, mentions, names, outcomeLabel, relevance, score, tokens, type Market, type Venue } from "./venues.js";
 
 const PROTOCOL_VERSION = "2026-07-28";
 const VENUE_IDS = ["polymarket", "kalshi", "limitless", "manifold"] as const;
@@ -452,6 +452,170 @@ function createServer() {
             .join("\n")
         : `No rewarded liquidity pools found${topic ? ` for "${topic}"` : ""}.`;
       return textResult(text, { opportunities, how_it_works: howItWorks, venues_checked: venuesChecked });
+    },
+  );
+
+  server.registerTool(
+    "exit_check",
+    {
+      title: "Check whether to exit a position",
+      description:
+        "For a prediction-market position the user holds (typically on PayBox's World plugin): compares the price the user can sell at now " +
+        "with what Kalshi, Polymarket, Limitless and Manifold price the same outcome, shows profit or loss, and gives a hold-or-sell signal " +
+        "with the exact sell step. Before calling, get the position from world_positions (shares and entry price if known) and the current " +
+        "bid for the held side from world_orderbook, and pass them in. Use when the user asks whether to sell, exit, cash out or hold a position. " +
+        "This tool never moves funds and is not financial advice.",
+      inputSchema: z
+        .object({
+          event: z.string().min(2).max(200).describe("The market or match, e.g. \"PSG vs Barcelona\" or \"Bitcoin above $200k in 2026\""),
+          outcome: z.string().min(1).max(80).optional().describe("The outcome held in a multi-outcome event, e.g. \"Barcelona\" or \"Draw\""),
+          side: z.enum(["yes", "no"]).default("yes"),
+          current_bid: z.number().gt(0).lt(1).optional().describe("Price the user can sell at now, e.g. World's best bid for the held side"),
+          entry_price: z.number().gt(0).lt(1).optional().describe("Average price paid per share"),
+          shares: z.number().positive().optional().describe("Number of outcome shares held"),
+        })
+        .strict(),
+      outputSchema: z.object({
+        event: z.string(),
+        outcome: z.string().nullable(),
+        side: z.enum(["yes", "no"]),
+        position: z.object({
+          shares: nullableNum,
+          entry_price: nullableNum,
+          current_bid: nullableNum,
+          cost_usd: nullableNum,
+          value_now_usd: nullableNum,
+          pnl_usd: nullableNum,
+          pnl_pct: nullableNum,
+          payout_if_win_usd: nullableNum,
+        }),
+        other_venues: z.array(z.object({ venue: venueEnum, venue_name: z.string(), title: z.string(), price: z.number(), url: z.string(), play_money: z.boolean() })),
+        consensus_price: nullableNum,
+        signal: z.enum(["sell_price_above_market", "sell_price_below_market", "in_line_with_market", "no_comparison"]),
+        summary: z.string(),
+        reasons: z.array(z.string()),
+        sell_steps: z.array(z.string()),
+      }),
+      annotations: readOnly,
+    },
+    async ({ event, outcome, side, current_bid, entry_price, shares }) => {
+      const topic = extractTopic(event);
+      const { markets } = await scout(topic, VENUE_IDS);
+      // Same outcome on other venues: the outcome must be named in the market's own outcome label,
+      // and draws only match draws.
+      // Price levels in the event ("200k", "2026") must all appear, so $150k markets don't stand in for $200k.
+      const levels = tokens(topic).filter((t) => /^\d{4,}$/.test(t));
+      const sameOutcome = markets.filter((m) => {
+        const title = tokens(`${m.title} ${m.event_title ?? ""}`);
+        if (!levels.every((l) => title.includes(l))) return false;
+        if (!outcome) return true;
+        const { label, fromTitle } = outcomeLabel(m);
+        const isDraw = /\b(draw|tie)\b/i.test(label);
+        if (/^(draw|tie)$/i.test(outcome.trim())) return isDraw;
+        // A full-title market only counts when it asks whether this outcome wins ("Will FC Barcelona win…")
+        // and does not name the opponent ("Will Paris win the match Barcelona VS Paris?" is about Paris).
+        const opponents = topic
+          .split(/\s+(?:vs\.?|v\.?|versus|against)\s+/i)
+          .filter((side) => !mentions(side, outcome))
+          .flatMap((side) => tokens(expandAliases(side)).filter(isSpecific));
+        const labelTokens = tokens(label);
+        return (
+          !isDraw &&
+          mentions(label, outcome) &&
+          (!fromTitle || (/\bwins?\b/i.test(label) && !opponents.some((t) => labelTokens.includes(t))))
+        );
+      });
+      const priced = sameOutcome
+        .map((m) => ({ m, price: side === "yes" ? m.yes_price : m.no_price }))
+        .filter((r): r is { m: Market; price: number } => r.price != null && r.price > 0 && r.price < 1)
+        .sort((a, b) => score(topic, b.m) - score(topic, a.m))
+        .slice(0, 6);
+      const real = priced.filter((r) => r.m.venue !== "manifold");
+      const consensus = real.length ? Math.round((real.reduce((s, r) => s + r.price, 0) / real.length) * 1000) / 1000 : null;
+
+      const money = (n: number | null) => (n == null ? null : Math.round(n * 100) / 100);
+      const cost = shares != null && entry_price != null ? money(shares * entry_price) : null;
+      const valueNow = shares != null && current_bid != null ? money(shares * current_bid) : null;
+      const pnl = cost != null && valueNow != null ? money(valueNow - cost) : null;
+      const pnlPct = cost && pnl != null ? Math.round((pnl / cost) * 1000) / 10 : null;
+
+      const reasons: string[] = [];
+      let signal: "sell_price_above_market" | "sell_price_below_market" | "in_line_with_market" | "no_comparison" = "no_comparison";
+      if (current_bid != null && consensus != null) {
+        const edge = current_bid - consensus;
+        const cents = (n: number) => `${Math.round(n * 1000) / 10}¢`;
+        if (edge >= 0.02) {
+          signal = "sell_price_above_market";
+          reasons.push(`Your sell price (${cents(current_bid)}) is ${cents(edge)} above what other markets price this at (${cents(consensus)}). Selling now locks in a better-than-market price.`);
+        } else if (edge <= -0.03) {
+          signal = "sell_price_below_market";
+          reasons.push(`Your sell price (${cents(current_bid)}) is ${cents(-edge)} below other markets (${cents(consensus)}). Selling now gives up value; holding or waiting for a better bid may pay more.`);
+        } else {
+          signal = "in_line_with_market";
+          reasons.push(`Your sell price (${cents(current_bid)}) is in line with other markets (${cents(consensus)}), so it comes down to your own view of the outcome.`);
+        }
+      } else if (current_bid == null) {
+        reasons.push("No current sell price was given; fetch the held side's best bid with world_orderbook for a full comparison.");
+      } else {
+        reasons.push("No matching market on other venues to compare against.");
+      }
+      if (pnl != null) reasons.push(`Selling now: ${pnl >= 0 ? "profit" : "loss"} of $${Math.abs(pnl)} (${pnlPct}%) on $${cost} paid.`);
+      const payout = shares != null ? money(shares) : null;
+      if (payout != null) reasons.push(`Holding to a win pays $${payout}; a loss pays $0.`);
+      const closes = priced.map((r) => r.m.closes_at).filter((c): c is string => !!c).sort()[0];
+      if (closes) {
+        const hours = (Date.parse(closes) - Date.now()) / 3_600_000;
+        if (hours > 0 && hours < 48) reasons.push(`The market closes in about ${Math.round(hours)} hours, so prices can move fast.`);
+      }
+
+      const sellSteps = [
+        `Call world_positions to confirm the exact outcome mint and the share balance (atomic outcome-token units).`,
+        `To sell, call world_change_position with side "sell", that market_mint, and size in atomic outcome-token units (all shares, or part of them).`,
+        `The user approves with their passkey; poll get_request until it completes. Proceeds return as USDC to the PayBox Solana wallet.`,
+      ];
+      const headline =
+        signal === "sell_price_above_market"
+          ? "Selling now beats the market price."
+          : signal === "sell_price_below_market"
+            ? "Your sell price is below the market; selling now gives up value."
+            : signal === "in_line_with_market"
+              ? "Your sell price matches the market; it is your call."
+              : "Not enough data for a cross-market comparison.";
+      const otherVenues = priced.map((r) => ({
+        venue: r.m.venue,
+        venue_name: VENUES[r.m.venue].name,
+        title: r.m.title,
+        price: r.price,
+        url: r.m.url,
+        play_money: r.m.venue === "manifold",
+      }));
+      const lines = [
+        `${headline} (${side.toUpperCase()}${outcome ? ` ${outcome}` : ""}, ${event})`,
+        ...reasons.map((r) => `- ${r}`),
+        ...otherVenues.map((v) => `  ${v.venue_name}${v.play_money ? " (play money)" : ""}: ${v.price} — ${v.title} ${v.url}`),
+        "Signal only, not financial advice.",
+      ];
+      return textResult(lines.join("\n"), {
+        event,
+        outcome: outcome ?? null,
+        side,
+        position: {
+          shares: shares ?? null,
+          entry_price: entry_price ?? null,
+          current_bid: current_bid ?? null,
+          cost_usd: cost,
+          value_now_usd: valueNow,
+          pnl_usd: pnl,
+          pnl_pct: pnlPct,
+          payout_if_win_usd: payout,
+        },
+        other_venues: otherVenues,
+        consensus_price: consensus,
+        signal,
+        summary: headline,
+        reasons,
+        sell_steps: sellSteps,
+      });
     },
   );
 

@@ -15,9 +15,12 @@ Type a hunch in plain words, like *"use Market Radar: PSG vs Barcelona"* or *"pr
 | `scout_markets` | Searches **Polymarket, Kalshi, Limitless and Manifold** at once and ranks matches by relevance, venue trust and volume, with live YES/NO prices and links. It understands casual prompts ("I want to bet on Arsenal…"), team short names (PSG, Barça, Man Utd) and matchups ("X vs Y" must match both sides). |
 | `prepare_bet` | Builds a trade ticket with live price, shares, payout and profit for a stake. It routes the bet through PayBox's **World** plugin when World lists the same market, so the user approves with a passkey from their PayBox wallet. Otherwise it gives the direct venue link. |
 | `suggest_market` | When no market exists, drafts a ready-to-send proposal (question, resolution criteria, close date, pitch) and lists where to propose or create it. |
+| `exit_check` | For a position you hold (e.g. on World): compares your current sell price with what Kalshi, Polymarket, Limitless and Manifold price the **same outcome**, shows profit or loss, and gives a hold-or-sell signal plus the exact sell step through World. |
 | `find_liquidity` | Ranks prediction markets paying the biggest liquidity rewards (Polymarket rewards, Limitless daily rewards), with the size and spread rules to qualify. |
 
-All four tools are read-only. Market Radar never moves funds; bets go through PayBox's own approval and signing flow.
+All five tools are read-only. Market Radar never moves funds; bets go through PayBox's own approval and signing flow.
+
+Ask *"Market Radar: should I sell my Barcelona position?"* and the agent reads your World position and current bid, then `exit_check` tells you whether that price is above, below or in line with other markets. The hackathon entry (v6) has the first four tools; `exit_check` was added afterwards.
 
 ## How a bet flows
 
@@ -53,7 +56,7 @@ api.manifold.markets
 
 ## Project layout
 
-- `src/plugin.ts`: the four MCP tools, ranking, routing and proposal drafting
+- `src/plugin.ts`: the five MCP tools, ranking, routing and proposal drafting
 - `src/venues.ts`: read-only adapters for each venue, query cleanup, aliases and relevance scoring
 - `src/paybox.ts`, `scripts/`: PayBox starter tooling (unchanged)
 

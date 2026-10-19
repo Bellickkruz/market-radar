@@ -246,6 +246,23 @@ const ALIASES: Record<string, string> = {
   eth: "Ethereum",
 };
 
+// The part of a title that names the outcome: "PSG vs Barcelona: Barcelona wins" → "Barcelona wins".
+export function outcomeLabel(m: Market): { label: string; fromTitle: boolean } {
+  const parts = m.title.split(/: | — /);
+  const last = parts[parts.length - 1]!;
+  return parts.length > 1 && last.length <= 60 ? { label: last, fromTitle: false } : { label: m.title, fromTitle: true };
+}
+
+// True when every specific word of `phrase` (or its alias) appears in `text`.
+export function mentions(text: string, phrase: string): boolean {
+  const have = new Set(tokens(text));
+  const want = tokens(phrase);
+  return (
+    want.length > 0 &&
+    want.every((t) => have.has(t) || (ALIASES[t] != null && tokens(ALIASES[t]).every((a) => have.has(a))))
+  );
+}
+
 export function expandAliases(text: string): string {
   let out = text;
   for (const [short, full] of Object.entries(ALIASES)) {
@@ -257,6 +274,7 @@ export function expandAliases(text: string): string {
 export function tokens(text: string): string[] {
   return text
     .toLowerCase()
+    .replace(/(\d),(?=\d{3}\b)/g, "$1")
     .replace(/\$?(\d+(?:\.\d+)?)\s*k\b/g, (_, n) => String(Number(n) * 1000))
     .replace(/[,$%?!.:;"'()]/g, " ")
     .split(/\s+/)
