@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { Pools } from "./Pools";
+import { Board, PoolsPanel, Radar, Rates } from "./Overview";
 import {
   DESTINATIONS, ORIGINS, USDC_CONTRACT, friendlyAmount, looksLikeAddress, quote, swapStatus,
   type Chain, type Destination, type Origin, type Quote, type SwapStatus,
@@ -62,7 +63,7 @@ export function App() {
   const [error, setError] = useState("");
   const [picked, setPicked] = useState<{ market: Market; side: Side } | null>(null);
 
-  const run = async (text: string) => {
+  const run = async (text: string, fundCheapest = false) => {
     const query = text.trim();
     if (query.length < 2) return;
     setQ(query);
@@ -76,6 +77,11 @@ export function App() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `Search failed (${res.status})`);
       setResult(json);
+      if (fundCheapest && json.compare?.cheapest_yes) {
+        const m = (json.markets as Market[]).find((x) => x.market_ref === json.compare.cheapest_yes);
+        if (m) setPicked({ market: m, side: "YES" });
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setError(String((e as Error).message ?? e));
     } finally {
@@ -93,30 +99,50 @@ export function App() {
       <Header net={net} setNet={setNet} />
       <main className="wrap">
         {net === "testnet" ? <Pools focus={focus} /> : <>
-        <section className="hero">
-          <h1>Find the best odds on any prediction market.<br /><span className="accent">Fund it from any coin.</span></h1>
-          <p className="lead">
-            One search across Polymarket, Kalshi, Limitless and Manifold. Then top up the venue with the best price from
-            whatever you hold (NEAR, ETH, SOL, BTC, USDT…) in one step, through NEAR Intents.
-          </p>
-          <form className="search" onSubmit={(e) => { e.preventDefault(); run(q); }}>
-            <input aria-label="What do you want to bet on?" placeholder="What do you think will happen?" value={q} onChange={(e) => setQ(e.target.value)} />
-            <button className="btn" disabled={busy || q.trim().length < 2}>{busy ? <span className="spinner" /> : "Scan"}</button>
-          </form>
-          <div className="chips">
-            {EXAMPLES.map((x) => <button key={x} className="chip" onClick={() => run(x)}>{x}</button>)}
+        <section className={`top ${result || busy ? "compact" : ""}`}>
+          <div className="top-text">
+            <span className="eyebrow">Prediction-market radar · powered by NEAR Intents</span>
+            {!result && !busy && (
+              <>
+                <h1>Every prediction market.<br /><span className="accent">One radar.</span></h1>
+                <p className="lead">Compare the same question on Polymarket, Kalshi, Limitless and Manifold, then fund the cheapest from any coin you hold.</p>
+              </>
+            )}
+            <form className="search" onSubmit={(e) => { e.preventDefault(); run(q); }}>
+              <span className="search-icon" aria-hidden="true">⌕</span>
+              <input aria-label="What do you want to bet on?" placeholder="Search any question: bitcoin 100k, Arsenal, election 2027…" value={q} onChange={(e) => setQ(e.target.value)} />
+              <button className="btn" disabled={busy || q.trim().length < 2}>{busy ? <span className="spinner" /> : "Scan"}</button>
+            </form>
+            <div className="chips">
+              {result && <button className="chip back" onClick={() => { setResult(null); setPicked(null); setQ(""); history.replaceState(null, "", "/"); }}>← Overview</button>}
+              {EXAMPLES.map((x) => <button key={x} className="chip" onClick={() => run(x)}>{x}</button>)}
+            </div>
           </div>
+          {!result && !busy && <Radar />}
         </section>
 
         {error && <div className="card bad">{error}</div>}
-        {busy && <div className="card center muted"><span className="spinner dark" /> Scanning 4 venues…</div>}
+        {busy && <div className="card center muted scanning"><span className="spinner dark" /> Scanning Polymarket, Kalshi, Limitless and Manifold…</div>}
         {!busy && result && <Results result={result} picked={picked} onPick={setPicked} onPool={(id) => setNet("testnet", id)} />}
-        {!result && !busy && <HowItWorks onPools={() => setNet("testnet")} />}
+        {!result && !busy && (
+          <div className="overview">
+            <Board onOpen={(query, fund) => run(query, fund)} />
+            <aside className="side">
+              <Rates />
+              <PoolsPanel onOpen={(id) => setNet("testnet", id)} />
+            </aside>
+          </div>
+        )}
         </>}
       </main>
-      <footer>
-        Market Radar never holds your money: NEAR Intents sends it from your wallet straight to your own venue account.
-        Prices are live quotes. Check that prediction markets are legal where you live.
+      <footer className="site-footer">
+        <div className="foot-brand"><img src="/radar.svg" alt="" /> <b>Market Radar</b> <span className="muted">· built on NEAR</span></div>
+        <nav>
+          <a href="https://github.com/Bellickkruz/market-radar" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="https://testnet.nearblocks.io/address/pools.mradar-mwcw3x85.testnet" target="_blank" rel="noreferrer">Radar Pools contract</a>
+          <a href="https://docs.near-intents.org" target="_blank" rel="noreferrer">NEAR Intents</a>
+        </nav>
+        <p className="muted">Market Radar never holds your money: NEAR Intents sends it from your wallet straight to your own venue account. Prices are live quotes, not advice. Check that prediction markets are legal where you live.</p>
       </footer>
     </>
   );
@@ -141,26 +167,6 @@ function Header({ net, setNet }: { net: Net; setNet: (n: Net) => void }) {
         <button className="icon-btn" onClick={flip} aria-label={dark ? "Light mode" : "Dark mode"}>{dark ? "☀️" : "🌙"}</button>
       </span>
     </header>
-  );
-}
-
-function HowItWorks({ onPools }: { onPools: () => void }) {
-  return (
-    <>
-    <section className="steps">
-      <div className="card"><div className="num">1</div><h3>Scan every venue</h3><p className="muted">Type a hunch in plain words. Market Radar finds the same question on Polymarket, Kalshi, Limitless and Manifold and shows who prices it cheapest.</p></div>
-      <div className="card"><div className="num">2</div><h3>Pick the best price</h3><p className="muted">See YES and NO prices side by side, with volume and how trustworthy each venue is. The cheapest real-money price is marked.</p></div>
-      <div className="card"><div className="num">3</div><h3>Fund it from any coin</h3><p className="muted">Paste your venue's deposit address. NEAR Intents turns your NEAR, ETH, SOL, BTC or USDT into USDC on the right chain, in about a minute.</p></div>
-    </section>
-    <section className="card pools-teaser">
-      <div>
-        <span className="pill">🧪 NEAR testnet</span>
-        <h3 style={{ marginTop: 8 }}>Radar Pools: our own prediction market on NEAR</h3>
-        <p className="muted" style={{ margin: 0 }}>Crypto prices and football with Home / Draw / Away, plus a Bitcoin round that settles every 2 minutes. Test money, no wallet needed.</p>
-      </div>
-      <button className="btn" onClick={onPools}>Try Radar Pools →</button>
-    </section>
-    </>
   );
 }
 
