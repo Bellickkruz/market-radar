@@ -121,6 +121,14 @@ src/                  Market Radar PayBox plugin (pre-hackathon baseline, see be
 - **Pool prices move.** In pool betting, the final payout depends on bets placed after yours. The app shows the payout "as the pools stand now".
 - **Some routes have minimums.** For example, USDT on Tron currently needs $100 or more. The app shows the minimum instead of failing.
 
+## Roadmap
+
+- **Bet without leaving Market Radar.** Today the user opens an account and places the bet on the venue itself (Market Radar links there and handles the funding). Next, the user connects their own venue wallet and Market Radar places the order for them, signed by that wallet. Polymarket supports this for third-party apps through its order API and builder programme; it needs Polymarket's approval and careful key handling, so it was out of scope for the hackathon.
+- **Radar Pools on mainnet.** Only with the right licences in the countries served. It would also need a decentralised oracle with a challenge window instead of a trusted resolver, deposits from any coin through NEAR Intents (`customRecipientMsg` → `ft_transfer_call` into the pools), and a security audit.
+- **Create a pool for any question.** When no venue lists a market, offer a Radar Pool for it. The pre-hackathon plugin already drafts these proposals.
+- **Price-gap alerts.** Notify the user when the same question is cheaper on one venue by more than a set number of cents.
+- **Market Radar for AI agents on NEAR.** Expose search, comparison and funding as tools an agent can call, for example "find the cheapest odds on Bitcoin $100k and fund it from my NEAR wallet".
+
 ## Disclosure
 
 - **Pre-hackathon baseline (not judged).** Market Radar started as a [PayBox](https://paybox.sh) plugin for AI agents, written on 2026-10-17 to 2026-10-19 for the MoonPay hackathon. It's frozen in the [`pre-hackathon`](https://github.com/Bellickkruz/market-radar/tree/pre-hackathon) branch. The section [Market Radar PayBox plugin](#market-radar-paybox-plugin-pre-hackathon) below describes it.

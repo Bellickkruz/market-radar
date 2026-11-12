@@ -348,6 +348,10 @@ function Fund({ market, side, dest }: { market: Market; side: Side; dest: Destin
         <div className="grow">
           <label>Your {dest.name} deposit address</label>
           <p className="hint" style={{ marginTop: 0 }}>{dest.howTo}</p>
+          <p className="signup">
+            New to {dest.name}? <a href={dest.signup.url} target="_blank" rel="noreferrer">Create an account on {dest.name} ↗</a>, then come back and paste your deposit address here.
+            <span className="muted"> {dest.signup.note}</span>
+          </p>
           {dest.chains.length > 1 && (
             <div className="chips" style={{ marginBottom: 8 }}>
               {dest.chains.map((c) => <button key={c} className={`chip ${chain === c ? "on" : ""}`} onClick={() => { setChain(c); setConfirmed(false); }}>USDC on {c}</button>)}

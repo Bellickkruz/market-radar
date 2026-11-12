@@ -31,6 +31,8 @@ export interface Destination {
   chains: Chain[];
   howTo: string;
   url: string;
+  /** Where to open an account, and what the venue asks for. */
+  signup: { url: string; note: string };
 }
 
 // Sources checked on 2026-11-12. Venues change deposit options, so the user always
@@ -40,16 +42,19 @@ export const DESTINATIONS: Record<Destination["venue"], Destination> = {
     venue: "polymarket", name: "Polymarket", chains: ["Polygon"],
     howTo: "In Polymarket, tap Deposit, choose USDC on Polygon, and copy the address it shows.",
     url: "https://polymarket.com",
+    signup: { url: "https://polymarket.com", note: "Tap Sign up and use email, Google or a wallet. Takes about 2 minutes. Not available in every country." },
   },
   limitless: {
     venue: "limitless", name: "Limitless", chains: ["Base"],
     howTo: "In Limitless, open your wallet, choose Deposit, and copy your Base address (native USDC on Base).",
     url: "https://limitless.exchange",
+    signup: { url: "https://limitless.exchange", note: "Connect or create a wallet on Base. Takes about 2 minutes." },
   },
   kalshi: {
     venue: "kalshi", name: "Kalshi", chains: ["Solana", "Base", "Ethereum", "Polygon", "Arbitrum"],
     howTo: "In Kalshi, choose Deposit, then Crypto, then USDC, pick a network, and copy the address. Choose the same network here.",
     url: "https://kalshi.com",
+    signup: { url: "https://kalshi.com/sign-up", note: "Kalshi is a regulated exchange: it asks for ID verification, and availability depends on where you live." },
   },
 };
 
