@@ -1,6 +1,7 @@
 // GET /api/scout?q=... : search Polymarket, Kalshi, Limitless and Manifold at once.
 // Same matching and ranking as the Market Radar PayBox plugin (api/_venues.ts is a copy
-// of src/venues.ts), returned as JSON for the web app. Read-only; no keys needed.
+// of src/venues.ts, plus trading fees), returned as JSON for the web app. Read-only; no keys needed.
+import { FUND_AMOUNT, FUND_CHAIN, fundingCosts } from "./_funding.js";
 import { SEARCH, VENUES, expandAliases, extractTopic, isSpecific, names, relevance, score, tokens, type Market, type Venue } from "./_venues.js";
 
 const VENUE_IDS: Venue[] = ["polymarket", "kalshi", "limitless", "manifold"];
@@ -91,7 +92,7 @@ function sameQuestion(a: Market, b: Market): boolean {
  * The best match on one real-money venue, plus the same question on every other venue that
  * lists it: this is where comparing prices means something.
  */
-function compare<T extends Market & { trust: string }>(ranked: T[]) {
+function compare<T extends Market & { trust: string }>(ranked: T[], funding: Partial<Record<Venue, number>> = {}) {
   const anchor = ranked.find((m) => m.trust !== "play_money");
   if (!anchor) return null;
   const rows: T[] = [anchor];
@@ -110,9 +111,43 @@ function compare<T extends Market & { trust: string }>(ranked: T[]) {
     cheapest_yes: cheapest("yes_price"),
     cheapest_no: cheapest("no_price"),
     /** Largest YES price difference between real-money venues, in cents. */
-    spread_cents: yes.length > 1 ? Math.round((Math.max(...yes) - Math.min(...yes)) * 100) : 0,
+    spread_cents: yes.length > 1 ? c1(Math.max(...yes) - Math.min(...yes)) : 0,
+    ...netGap(real, funding),
   };
 }
+
+/**
+ * The gap that is left after costs. For each real-money venue, the all-in price of one YES
+ * contract = price + the venue's taker fee + the cost of moving USDC there (live NEAR Intents
+ * quote for $100, all fees in). Net gap = all-in price on the dearest venue minus all-in price on
+ * the cheapest: what you actually save per contract by buying on the cheaper venue.
+ */
+function netGap(real: Market[], funding: Partial<Record<Venue, number>>) {
+  const priced = real.filter((m) => m.yes_price != null && m.yes_price > 0 && m.yes_price < 1);
+  const costs = priced.map((m) => {
+    const p = m.yes_price!;
+    const fee = m.yes_fee ?? null;
+    const fund = funding[m.venue] != null ? funding[m.venue]! * p : null;
+    return {
+      ref: m.market_ref, venue: m.venue, price_cents: c1(p),
+      fee_cents: fee == null ? null : c1(fee),
+      funding_cents: fund == null ? null : c1(fund),
+      funding_chain: FUND_CHAIN[m.venue] ?? null,
+      all_in_cents: fee == null || fund == null ? null : c1(p + fee + fund),
+    };
+  });
+  const lo = [...priced].sort((a, b) => a.yes_price! - b.yes_price!)[0];
+  const hi = [...priced].sort((a, b) => b.yes_price! - a.yes_price!)[0];
+  const allIn = (m?: Market) => costs.find((c) => c.ref === m?.market_ref)?.all_in_cents ?? null;
+  const a = allIn(lo), b = allIn(hi);
+  return {
+    costs,
+    fund_amount: FUND_AMOUNT,
+    /** Raw gap minus fees and funding, in cents per contract; null if a venue's fee is unknown. */
+    net_gap_cents: priced.length > 1 && a != null && b != null ? c1(b / 100 - a / 100) : null,
+  };
+}
+const c1 = (usd: number) => Math.round(usd * 1000) / 10;
 
 // ---------------------------------------------------------------- Radar Pools (our NEAR testnet market)
 
@@ -155,7 +190,7 @@ function matchPools(pools: PoolMarket[], against: Market[]) {
 
 export async function search(query: string, limit = 12) {
   const topic = extractTopic(query);
-  const [{ markets, venues }, pools] = await Promise.all([scout(topic), openPools()]);
+  const [{ markets, venues }, pools, funding] = await Promise.all([scout(topic), openPools(), fundingCosts()]);
   const perEvent = new Map<string, number>();
   const ranked = markets
     .sort((a, b) => score(topic, b) - score(topic, a))
@@ -168,7 +203,7 @@ export async function search(query: string, limit = 12) {
     .sort((a, b) => Number(fitsQuery(topic, b)) - Number(fitsQuery(topic, a)))
     .slice(0, limit)
     .map((m) => ({ ...m, venue_name: VENUES[m.venue].name, trust: VENUES[m.venue].trust, match: Math.round(score(topic, m) * 100) / 100 }));
-  const cmp = compare(ranked);
+  const cmp = compare(ranked, funding);
   const against = cmp ? ranked.filter((m) => cmp.refs.includes(m.market_ref)) : ranked.filter((m) => m.trust !== "play_money").slice(0, 3);
   return { query, topic, markets: ranked, compare: cmp, venues, pools: matchPools(pools, against) };
 }

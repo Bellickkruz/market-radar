@@ -27,7 +27,13 @@ interface SearchResult {
   topic: string;
   markets: Market[];
   /** The best match plus the same question on other venues, with the cheapest prices marked. */
-  compare: { question: string; refs: string[]; cheapest_yes: string | null; cheapest_no: string | null; spread_cents: number } | null;
+  compare: {
+    question: string; refs: string[]; cheapest_yes: string | null; cheapest_no: string | null; spread_cents: number;
+    /** Per venue: YES price, taker fee and the cost of moving USDC there, all in cents per contract. */
+    costs?: { ref: string; venue: string; price_cents: number; fee_cents: number | null; funding_cents: number | null; funding_chain: string | null; all_in_cents: number | null }[];
+    fund_amount?: number;
+    net_gap_cents?: number | null;
+  } | null;
   venues: { venue: string; ok: boolean; found: number }[];
   /** Radar Pools (our NEAR testnet market) asking the same question. */
   pools: { id: string; title: string; outcomes: string[]; pools: string[]; closes_at: string }[];
@@ -200,7 +206,16 @@ function Results({ result, picked, onPick, onPool }: { result: SearchResult; pic
         <article className="card compare">
           <div className="row" style={{ justifyContent: "space-between" }}>
             <b>📡 Same question on {group.length} venues</b>
-            {c.spread_cents > 0 && <span className="pill">{c.spread_cents}¢ price gap</span>}
+            {c.spread_cents > 0 && (
+              <span className="row" style={{ gap: 6 }}>
+                <span className="pill pill-plain">{c.spread_cents}¢ price gap</span>
+                {c.net_gap_cents != null && (
+                  <span className={`pill ${c.net_gap_cents > 0 ? "pill-good" : "pill-warn"}`} title="What you save per contract after each venue's trading fee and the cost of moving USDC there">
+                    {c.net_gap_cents > 0 ? `${c.net_gap_cents}¢ after fees` : "fees eat this gap"}
+                  </span>
+                )}
+              </span>
+            )}
           </div>
           <h3 className="mtitle">{c.question}</h3>
           <div className="cmp-rows">
@@ -211,10 +226,14 @@ function Results({ result, picked, onPick, onPool }: { result: SearchResult; pic
                   <a className="small" href={m.url} target="_blank" rel="noreferrer">open ↗</a>
                 </div>
                 <Prices m={m} cheapYes={c.cheapest_yes === m.market_ref} cheapNo={c.cheapest_no === m.market_ref} picked={picked} onPick={onPick} />
+                <AllIn cost={c.costs?.find((x) => x.ref === m.market_ref)} />
               </div>
             ))}
           </div>
-          <p className="hint">Each venue words it a little differently; open them to check the exact rules before betting. Manifold is play money.</p>
+          <p className="hint">
+            <b>All-in</b> = YES price + the venue's trading fee + moving ${c.fund_amount ?? 100} of USDC there through NEAR Intents (live quote, all fees in), per contract.
+            {" "}<b>Same question doesn't always mean same rules:</b> venues can settle on different sources or deadlines, so open each one and read its rules before betting. Manifold is play money.
+          </p>
           {pickedInGroup && <Fund key={picked!.market.market_ref + picked!.side} market={picked!.market} side={picked!.side} dest={DESTINATIONS[picked!.market.venue as Destination["venue"]]} />}
         </article>
       )}
@@ -261,6 +280,18 @@ function Results({ result, picked, onPick, onPool }: { result: SearchResult; pic
       </div>
       <p className="hint center">Tap a YES or NO price to fund that bet.</p>
     </section>
+  );
+}
+
+/** One venue's all-in cost per YES contract: price + trading fee + moving money there. */
+function AllIn({ cost }: { cost?: NonNullable<NonNullable<SearchResult["compare"]>["costs"]>[number] }) {
+  if (!cost) return null;
+  if (cost.all_in_cents == null) return <span className="allin muted small">All-in: fee not published</span>;
+  return (
+    <span className="allin small" title={`Price ${cost.price_cents}¢ + trading fee ${cost.fee_cents}¢ + moving USDC to ${cost.funding_chain} ${cost.funding_cents}¢`}>
+      All-in <b className="tnum">{cost.all_in_cents}¢</b>
+      <span className="muted"> · fee {cost.fee_cents}¢ · moving money {cost.funding_cents}¢</span>
+    </span>
   );
 }
 

@@ -14,6 +14,28 @@ export interface Market {
   volume_unit: "USD" | "USDC" | "contracts" | "MANA";
   closes_at: string | null;
   url: string;
+  /** Venue taker fee for buying one YES contract at yes_price, in USD (null = not known). */
+  yes_fee?: number | null;
+}
+
+// ---- Trading fees (each venue's own published rule, checked 2026-11-12) ------------------
+// Polymarket: fee = rate x p x (1-p) per share; the rate comes with each market (feeSchedule).
+// Kalshi: fee = 0.07 x multiplier x p x (1-p) per contract ("quadratic" series).
+// Limitless: new venues 5% x (1-p) of the USDC value; legacy order books a buy fee of 3% up to
+// 50c, falling to 0.4% (paid in contracts); AMM markets a flat 0.4%.
+const quad = (rate: number, p: number | null) => (p == null ? null : rate * p * (1 - p));
+const LIMITLESS_LEGACY_BUY: [number, number][] = [[0.5, 0.03], [0.55, 0.0252], [0.6, 0.0213], [0.65, 0.018], [0.7, 0.0151], [0.75, 0.0126], [0.8, 0.0105], [0.85, 0.0085], [0.9, 0.0068], [0.95, 0.0053], [0.99, 0.0042], [1, 0.004]];
+function limitlessFee(s: any, p: number | null): number | null {
+  if (p == null) return null;
+  if (s?.metadata?.fee === false) return 0;
+  if (s?.tradeType === "amm") return 0.004 * p;
+  if (s?.venue?.feeModule) return 0.05 * p * (1 - p);
+  let pct = 0.03;
+  for (let i = 1; i < LIMITLESS_LEGACY_BUY.length; i++) {
+    const [p0, f0] = LIMITLESS_LEGACY_BUY[i - 1]!, [p1, f1] = LIMITLESS_LEGACY_BUY[i]!;
+    if (p > p0 && p <= p1) pct = f0 + ((f1 - f0) * (p - p0)) / (p1 - p0);
+  }
+  return (p * pct) / (1 - pct); // the fee is taken in contracts, so each contract you keep costs a little more
 }
 
 export const VENUES: Record<Venue, { name: string; trust: "regulated" | "high" | "medium" | "play_money"; trustScore: number; money: string; note: string }> = {
@@ -86,6 +108,12 @@ function polymarketMarket(m: any, event: any): Market | null {
     volume_unit: "USD",
     closes_at: iso(m.endDate),
     url: `https://polymarket.com/event/${event?.slug ?? m.slug}`,
+    yes_fee: (() => {
+      const p = round(yesIdx >= 0 ? prices[yesIdx] ?? null : prices[0] ?? null);
+      if (m.feesEnabled === false) return 0;
+      const rate = num(m.feeSchedule?.rate);
+      return rate != null ? quad(rate, p) : null;
+    })(),
   };
 }
 
@@ -132,6 +160,9 @@ function kalshiMarket(m: any, series: any): Market | null {
     volume_unit: "contracts",
     closes_at: iso(m.close_ts ?? m.close_time),
     url: `https://kalshi.com/markets/${seriesTicker.toLowerCase()}`,
+    // "quadratic" and "quadratic_with_maker_fees" charge takers the same; "fee_free" charges nothing.
+    yes_fee: /free/i.test(String(series?.fee_type ?? "")) ? 0
+      : /quadratic/i.test(String(series?.fee_type ?? "quadratic")) ? quad(0.07 * (num(series?.fee_multiplier) ?? 1), ask) : null,
   };
 }
 
@@ -172,6 +203,7 @@ function limitlessMarkets(m: any): Market[] {
         volume_unit: "USDC" as const,
         closes_at: iso(s.expirationTimestamp ?? m.expirationTimestamp),
         url: `https://limitless.exchange/markets/${m.slug}`,
+        yes_fee: limitlessFee({ ...m, ...s }, prices[0] ?? null),
       };
     });
 }

@@ -31,7 +31,7 @@ export async function board() {
     // Polymarket words questions most plainly; Kalshi appends the outcome ("… — Arsenal").
     const poly = venues.polymarket ? byRef.get(venues.polymarket.ref)?.title : null;
     const question = (poly ?? compare.question).split(" — ")[0]!;
-    return [{ query: QUESTIONS[i]!, question, venues, cheapest_yes: cheapest, gap_cents: compare.spread_cents, pool: pools[0]?.id ?? null }];
+    return [{ query: QUESTIONS[i]!, question, venues, cheapest_yes: cheapest, gap_cents: compare.spread_cents, net_gap_cents: compare.net_gap_cents, pool: pools[0]?.id ?? null }];
   });
   rows.sort((a, b) => b.gap_cents - a.gap_cents);
   return { updated: new Date().toISOString(), rows };

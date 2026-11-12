@@ -55,6 +55,8 @@ code { font-size: 12px; }
 .logo img { width: 32px; height: 32px; }
 .logo span { color: var(--accent); }
 .pill { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.pill-plain { background: var(--raised); color: var(--muted); }
+.pill-warn { background: var(--bad-soft); color: var(--bad); }
 .icon-btn { background: var(--raised); border: 1px solid var(--line); color: var(--ink); width: 36px; height: 36px; border-radius: 10px; cursor: pointer; }
 
 .hero { padding: 26px 0 10px; }
@@ -131,8 +133,10 @@ footer { text-align: center; color: var(--muted); font-size: 13px; padding: 24px
 .compare { border: 2px solid var(--accent); }
 .cmp-rows { display: grid; gap: 10px; }
 .cmp-row { display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: center; }
+.allin { grid-column: 2; margin-top: -4px; color: var(--ink); }
+.allin b { font-weight: 700; }
 .cmp-venue { display: grid; gap: 2px; justify-items: start; }
-@media (max-width: 420px) { .cmp-row { grid-template-columns: 1fr; } .cmp-venue { display: flex; gap: 8px; align-items: center; } }
+@media (max-width: 420px) { .cmp-row { grid-template-columns: 1fr; } .allin { grid-column: 1; } .cmp-venue { display: flex; gap: 8px; align-items: center; } }
 
 /* Network switch */
 .netswitch { display: inline-flex; background: var(--raised); border: 1px solid var(--line); border-radius: 99px; padding: 3px; }
@@ -242,6 +246,8 @@ footer.site-footer { max-width: 1120px; text-align: left; display: grid; gap: 10
 .board-row .cell.best { background: var(--accent-soft); color: var(--accent); font-weight: 700; box-shadow: inset 0 0 0 1px var(--accent); }
 .board-row .cell.play { color: var(--muted); }
 .board-row .gap b { color: var(--ink); }
+.board-row .gap .net { display: block; font-size: 11px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.board-row .gap .net.eaten { color: var(--bad); }
 .dim { color: var(--line); }
 .fund-btn { white-space: nowrap; }
 .flash { transition: color .3s; border-radius: 4px; }
@@ -281,6 +287,7 @@ footer.site-footer { max-width: 1120px; text-align: left; display: grid; gap: 10
   .board-row .cell { text-align: center; font-size: 13px; }
   .board-row .cell::before { content: attr(data-venue); display: block; font-family: "Inter", system-ui, sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
   .board-row .gap { grid-column: 1 / 3; text-align: left; font-size: 13px; }
+  .board-row .gap .net { display: inline; margin-left: 6px; }
   .board-row .gap::before { content: "Gap "; font-family: "Inter", system-ui, sans-serif; color: var(--muted); font-size: 12px; }
   .board-row .fund-btn { grid-column: 3 / 5; }
   .blip-label { font-size: 10px; padding: 1px 6px; }

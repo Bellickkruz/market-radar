@@ -9,6 +9,8 @@ interface BoardRow {
   venues: Partial<Record<VenueId, { yes: number | null; no: number | null; url: string; ref: string }>>;
   cheapest_yes: VenueId | null;
   gap_cents: number;
+  /** The gap left after each venue's trading fee and the cost of moving USDC there. */
+  net_gap_cents?: number | null;
   pool: string | null;
 }
 
@@ -120,12 +122,17 @@ export function Board({ onOpen }: { onOpen: (query: string, fundCheapest: boolea
                 </span>
               );
             })}
-            <span className="tnum gap"><b>{r.gap_cents}¢</b></span>
+            <span className="tnum gap" title="Raw price gap, then what's left after trading fees and moving money">
+              <b>{r.gap_cents}¢</b>
+              {r.net_gap_cents != null && <small className={`net ${r.net_gap_cents > 0 ? "" : "eaten"}`}>{r.net_gap_cents > 0 ? `${r.net_gap_cents}¢ net` : "fees eat it"}</small>}
+            </span>
             <button className="btn small fund-btn" onClick={() => onOpen(r.query, true)}>Fund cheapest</button>
           </div>
         ))}
       </div>
-      <p className="hint">Manifold is play money, shown as a crowd signal. Venues word questions differently; open them to check the exact rules.</p>
+      <p className="hint">
+        <b>Net</b> = the gap left after each venue's trading fee and moving $100 of USDC there through NEAR Intents (live quote). Venues word questions differently and can settle them on different rules, so open them and check before betting. Manifold is play money, shown as a crowd signal.
+      </p>
     </section>
   );
 }
