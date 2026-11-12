@@ -116,7 +116,8 @@ const fmtUsd = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDig
 
 /** Settle quick rounds that have closed, and open a new one when none is running. */
 async function flash() {
-  const markets = await view<Market[]>("get_markets", { from: 0, limit: 100 });
+  // Only open markets matter here, however many rounds have been played.
+  const markets = await view<Market[]>("get_open_markets");
   const now = Date.now();
   const rounds = markets.filter((m) => m.category === "flash");
   const settled: string[] = [];
@@ -127,27 +128,39 @@ async function flash() {
     const threshold = Number(m.title.slice(FLASH_PREFIX.length).replace(/[,?]/g, "").split(" ")[0]);
     const winner = price > threshold ? 0 : 1;
     const at = new Date(closeMs).toISOString().slice(11, 16);
-    await call("resolve", {
+    // Another visitor's page may settle the same round at the same moment: that's fine.
+    const ok = await call("resolve", {
       market_id: m.id, winner,
       resolution: `Coinbase BTC-USD price at ${at} UTC: ${fmtUsd(price)} (${winner === 0 ? "above" : "not above"} ${fmtUsd(threshold)})`,
       source: `https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=60&start=${new Date(closeMs - 60_000).toISOString()}&end=${new Date(closeMs).toISOString()}`,
-    });
-    settled.push(m.id);
+    }).then(() => true, () => false);
+    if (ok) settled.push(m.id);
   }
-  const running = rounds.some((r) => r.status === "Open" && Number(BigInt(r.closes_at) / 1_000_000n) > now + 30_000);
+  const runningIn = (ms: Market[]) =>
+    ms.some((r) => r.category === "flash" && r.status === "Open" && Number(BigInt(r.closes_at) / 1_000_000n) > Date.now() + 30_000);
+  let running = runningIn(rounds);
+  if (!running) {
+    // Two visitors can ask at the same moment: wait a random beat and look again before opening one.
+    await new Promise((r) => setTimeout(r, 300 + Math.random() * 1500));
+    running = runningIn(await view<Market[]>("get_open_markets"));
+  }
   let created: string | null = null;
   if (!running) {
     const price = await spotBtc();
     // Close on a whole minute, so the result is one public 1-minute candle.
     const closeMs = (Math.floor(now / 60_000) + FLASH_MINUTES + 1) * 60_000;
-    created = String(await call("create_market", {
+    // The contract refuses a second round for the same closing minute, so racing visitors can't double it.
+    const id = await call("create_market", {
       title: `${FLASH_PREFIX}${price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} at ${new Date(closeMs).toISOString().slice(11, 16)} UTC?`,
       category: "flash",
       outcomes: ["Higher", "Not higher"],
       closes_at: String(BigInt(closeMs) * 1_000_000n),
-    }));
-    // Seed both sides so the first player sees a real price.
-    for (const outcome of [0, 1]) await call("bet", { market_id: created, outcome, amount: String(10n * D) }, 30n);
+    }).catch(() => null);
+    if (id != null) {
+      created = String(id);
+      // Seed both sides so the first player sees a real price.
+      for (const outcome of [0, 1]) await call("bet", { market_id: created, outcome, amount: String(10n * D) }, 30n);
+    }
   }
   return json(200, { settled, created });
 }

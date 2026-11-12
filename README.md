@@ -62,7 +62,7 @@ Prediction markets are not legal everywhere. Check before funding a venue.
 | Kalshi | the network the user picks on Kalshi's deposit screen: Solana, Base, Ethereum, Polygon or Arbitrum | matching `nep141:…` USDC asset |
 | Manifold | not funded (play money, shown as a crowd signal only) | |
 
-**Radar Pools** (`contracts/pools`, Rust, near-sdk 5; 13 unit tests)
+**Radar Pools** (`contracts/pools`, Rust, near-sdk 5; 15 unit tests)
 - **Markets** have 2 or 3 outcomes, a closing time, one pool per outcome and a status (`Open`, `Resolved` or `Cancelled`).
 - **Money in:** NEP-141 `ft_transfer_call` with `{"owner": ...}` credits an internal balance. On mainnet this is exactly how a NEAR Intents swap would deposit; on testnet a test dollar (`tusd.mradar-mwcw3x85.testnet`) stands in.
 - **Owners** are NEAR accounts (`bet`, `withdraw`) or ed25519 keys. A key signs `{contract}|radar-pools|{owner}|nonce:{n}|{action}`, and anyone can submit it with `bet_signed`. The per-owner nonce makes every signature single-use, and nobody can bet another owner's balance.
@@ -91,7 +91,7 @@ To deploy on Vercel, import the repository, set **Root Directory** to `web` (Vit
 Radar Pools contracts:
 
 ```bash
-cd contracts/pools && cargo test            # 13 tests: pro-rata payouts, 3 outcomes, refunds, replay, wrong key, closing time, operator only
+cd contracts/pools && cargo test            # 15 tests: pro-rata payouts, 3 outcomes, refunds, replay, wrong key, closing time, operator only, one quick round per minute
 cargo near build non-reproducible-wasm
 cd ../test-token && cargo near build non-reproducible-wasm
 cd ../scripts && npm install

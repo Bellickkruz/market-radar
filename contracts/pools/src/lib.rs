@@ -125,6 +125,14 @@ impl Contract {
         require!((2..=3).contains(&outcomes.len()), "A market has 2 or 3 outcomes");
         require!(outcomes.iter().all(|o| !o.trim().is_empty() && o.len() <= 40), "Outcome names must be 1-40 characters");
         require!(closes_at.0 > env::block_timestamp(), "Closing time must be in the future");
+        let category = category.trim().to_lowercase();
+        if category == "flash" {
+            // Quick rounds are opened on demand by the relay; one round per closing time.
+            require!(
+                !self.markets.values().any(|m| m.category == "flash" && m.status == MarketStatus::Open && m.closes_at == closes_at),
+                "A round for this closing time already exists"
+            );
+        }
         let id = self.next_id;
         self.next_id += 1;
         let n = outcomes.len();
@@ -133,7 +141,7 @@ impl Contract {
             Market {
                 id: U64(id),
                 title,
-                category: category.trim().to_lowercase(),
+                category,
                 outcomes: outcomes.into_iter().map(|o| o.trim().to_string()).collect(),
                 closes_at,
                 status: MarketStatus::Open,
@@ -280,6 +288,21 @@ impl Contract {
             .take(limit.unwrap_or(50).min(100) as usize)
             .cloned()
             .collect()
+    }
+
+    /// Every market still open for bets or waiting for its result, oldest first.
+    pub fn get_open_markets(&self) -> Vec<Market> {
+        self.markets.values().filter(|m| m.status == MarketStatus::Open).cloned().collect()
+    }
+
+    /// The newest markets first (ids are consecutive), e.g. the latest quick rounds.
+    pub fn get_recent_markets(&self, limit: Option<u32>) -> Vec<Market> {
+        let n = limit.unwrap_or(20).min(100) as u64;
+        (1..self.next_id).rev().take(n as usize).filter_map(|id| self.markets.get(&id).cloned()).collect()
+    }
+
+    pub fn get_market_count(&self) -> u64 {
+        self.next_id - 1
     }
 
     pub fn get_market(&self, market_id: U64) -> Option<Market> {

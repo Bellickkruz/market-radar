@@ -223,3 +223,22 @@ fn near_accounts_bet_directly_and_positions_are_listed() {
     assert_eq!(c.get_owner_markets("alice.near".into()), vec![2]);
     assert!(get_logs().iter().any(|l| l.contains("bet market=2 owner=alice.near outcome=1")));
 }
+
+#[test]
+fn open_and_recent_views() {
+    let mut c = setup();
+    ctx("ops.near", 10 * MIN);
+    c.resolve(U64(2), 0, "BTC $101,000".into(), None);
+    assert_eq!(c.get_open_markets().iter().map(|m| m.id.0).collect::<Vec<_>>(), vec![1]);
+    assert_eq!(c.get_recent_markets(Some(1))[0].id.0, 2);
+    assert_eq!(c.get_market_count(), 2);
+}
+
+#[test]
+#[should_panic(expected = "A round for this closing time already exists")]
+fn one_quick_round_per_closing_time() {
+    let mut c = setup();
+    ctx("ops.near", 0);
+    c.create_market("Bitcoin in 2 minutes: above $1".into(), "flash".into(), vec!["Higher".into(), "Not higher".into()], U64(3 * MIN));
+    c.create_market("Bitcoin in 2 minutes: above $2".into(), "flash".into(), vec!["Higher".into(), "Not higher".into()], U64(3 * MIN));
+}

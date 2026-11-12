@@ -182,7 +182,7 @@ export function PoolsPanel({ onOpen }: { onOpen: (id?: string) => void }) {
   const [markets, setMarkets] = useState<PoolMarket[] | null>(null);
   const [, tick] = useState(0);
   useEffect(() => {
-    const load = () => view<PoolMarket[]>("get_markets", { from: 0, limit: 100 }).then(setMarkets).catch(() => {});
+    const load = () => view<PoolMarket[]>("get_open_markets").then(setMarkets).catch(() => {});
     // Settle a finished Bitcoin round and open the next one, so the countdown is always live.
     relay({ method: "flash" }).catch(() => {}).finally(load);
     const a = setInterval(load, 15_000);

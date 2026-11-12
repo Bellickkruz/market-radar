@@ -128,8 +128,8 @@ async function openPools(): Promise<PoolMarket[]> {
       body: JSON.stringify({
         jsonrpc: "2.0", id: "mr", method: "query",
         params: {
-          request_type: "call_function", finality: "optimistic", account_id: POOLS_CONTRACT, method_name: "get_markets",
-          args_base64: Buffer.from(JSON.stringify({ from: 0, limit: 100 })).toString("base64"),
+          request_type: "call_function", finality: "optimistic", account_id: POOLS_CONTRACT, method_name: "get_open_markets",
+          args_base64: Buffer.from("{}").toString("base64"),
         },
       }),
     });

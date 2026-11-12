@@ -26,11 +26,17 @@ export function Pools({ focus }: { focus?: string }) {
 
   const load = useCallback(async () => {
     try {
-      const [ms, bal, mine] = await Promise.all([
-        view<PoolMarket[]>("get_markets", { from: 0, limit: 100 }),
+      // Open markets + the latest results, plus any market this player has a stake in.
+      const [open, recent, bal, mine] = await Promise.all([
+        view<PoolMarket[]>("get_open_markets"),
+        view<PoolMarket[]>("get_recent_markets", { limit: 30 }),
         view<string>("get_balance", { owner: me.id }),
         view<number[]>("get_owner_markets", { owner: me.id }),
       ]);
+      const byId = new Map([...recent, ...open].map((m) => [m.id, m]));
+      const missing = mine.map(String).filter((id) => !byId.has(id)).slice(-30);
+      (await Promise.all(missing.map((id) => view<PoolMarket | null>("get_market", { market_id: id })))).forEach((m) => m && byId.set(m.id, m));
+      const ms = [...byId.values()].sort((a, b) => Number(a.id) - Number(b.id));
       const pos = await Promise.all(mine.map((id) => view<Position | null>("get_position", { market_id: String(id), owner: me.id })));
       const map: Record<string, Position> = {};
       mine.forEach((id, i) => { if (pos[i]) map[String(id)] = pos[i]!; });
