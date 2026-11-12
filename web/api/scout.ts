@@ -114,9 +114,48 @@ function compare<T extends Market & { trust: string }>(ranked: T[]) {
   };
 }
 
+// ---------------------------------------------------------------- Radar Pools (our NEAR testnet market)
+
+const POOLS_CONTRACT = process.env.POOLS_CONTRACT || "pools.mradar-mwcw3x85.testnet";
+interface PoolMarket { id: string; title: string; category: string; outcomes: string[]; pools: string[]; closes_at: string; status: string }
+
+async function openPools(): Promise<PoolMarket[]> {
+  try {
+    const res = await fetch("https://rpc.testnet.fastnear.com", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      signal: AbortSignal.timeout(3000),
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: "mr", method: "query",
+        params: {
+          request_type: "call_function", finality: "optimistic", account_id: POOLS_CONTRACT, method_name: "get_markets",
+          args_base64: Buffer.from(JSON.stringify({ from: 0, limit: 100 })).toString("base64"),
+        },
+      }),
+    });
+    const j = await res.json();
+    const all = JSON.parse(Buffer.from(j.result.result).toString()) as PoolMarket[];
+    return all.filter((m) => m.status === "Open" && m.category !== "flash");
+  } catch {
+    return [];
+  }
+}
+
+const asMarket = (p: PoolMarket): Market => ({
+  venue: "manifold", market_ref: `pool:${p.id}`, title: p.title, event_title: null, yes_price: null, no_price: null,
+  volume: null, volume_unit: "USD", closes_at: null, url: "",
+});
+
+/** Our pools that ask the same question as the compared markets (or the top results). */
+function matchPools(pools: PoolMarket[], against: Market[]) {
+  return pools
+    .filter((p) => against.some((m) => sameQuestion(m, asMarket(p)) || sameQuestion(asMarket(p), m)))
+    .map((p) => ({ id: p.id, title: p.title, outcomes: p.outcomes, pools: p.pools, closes_at: p.closes_at }));
+}
+
 export async function search(query: string, limit = 12) {
   const topic = extractTopic(query);
-  const { markets, venues } = await scout(topic);
+  const [{ markets, venues }, pools] = await Promise.all([scout(topic), openPools()]);
   const perEvent = new Map<string, number>();
   const ranked = markets
     .sort((a, b) => score(topic, b) - score(topic, a))
@@ -129,7 +168,9 @@ export async function search(query: string, limit = 12) {
     .sort((a, b) => Number(fitsQuery(topic, b)) - Number(fitsQuery(topic, a)))
     .slice(0, limit)
     .map((m) => ({ ...m, venue_name: VENUES[m.venue].name, trust: VENUES[m.venue].trust, match: Math.round(score(topic, m) * 100) / 100 }));
-  return { query, topic, markets: ranked, compare: compare(ranked), venues };
+  const cmp = compare(ranked);
+  const against = cmp ? ranked.filter((m) => cmp.refs.includes(m.market_ref)) : ranked.filter((m) => m.trust !== "play_money").slice(0, 3);
+  return { query, topic, markets: ranked, compare: cmp, venues, pools: matchPools(pools, against) };
 }
 
 const json = (status: number, body: object) =>

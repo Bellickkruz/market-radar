@@ -1,10 +1,11 @@
 # Market Radar 🛰️
 
-**Find the best odds on any prediction market. Fund it from any coin, through NEAR Intents.**
+**Find the best odds on any prediction market. Fund it from any coin, through NEAR Intents. And when you want to try one on NEAR itself, Radar Pools is our own prediction market contract on NEAR testnet.**
 
 - **Live app (NEAR HACKATHON entry):** _deploying; link added here once live_
 - **What was built for NEAR HACKATHON:** the `web/` app, compared with the pre-hackathon baseline in [`pre-hackathon...main`](https://github.com/Bellickkruz/market-radar/compare/pre-hackathon...main) (see [Disclosure](#disclosure))
-- **Tracks:** `defi` (cross-chain settlement through NEAR Intents), `realworld` (stablecoin payments for consumers)
+- **Radar Pools contract (NEAR testnet):** [`pools.mradar-mwcw3x85.testnet`](https://testnet.nearblocks.io/address/pools.mradar-mwcw3x85.testnet)
+- **Tracks:** `defi` (a prediction market on NEAR, plus cross-chain settlement through NEAR Intents), `realworld` (stablecoin payments for consumers)
 - **Other project by the same author:** [PayPact](https://github.com/Bellickkruz/paypact), escrowed invoice links on NEAR. The two projects share no code.
 
 ## The problem
@@ -19,6 +20,8 @@ The same question ("Will Bitcoin reach $100k by the end of 2026?") trades on sev
 
 Market Radar never holds money. The NEAR Intents deposit address forwards your coin, swapped to USDC, straight to your own venue account. If the swap can't complete, it refunds to an address you give.
 
+4. **Radar Pools: a prediction market on NEAR (testnet).** Flip the header switch from **Mainnet** to **Testnet** and Market Radar becomes a small prediction market of our own, running as a Rust smart contract on NEAR. It offers crypto price questions (BTC, ETH, SOL), football with three outcomes (home / draw / away), and a **Bitcoin round that opens and settles every 2 minutes**. It uses pool betting: each outcome has a pool, its share of the pot is its price, and the winners split the whole pot by stake. Players need no wallet: the browser holds a key that signs each bet, and a relay pays the gas. When a mainnet search matches one of our pools, a "Radar Pools · NEAR · testnet only" card appears in the results. **Real-money betting needs licences, so Radar Pools runs on testnet only**, with free test dollars.
+
 ## Try it (no wallet needed to see everything up to payment)
 
 | # | Do | See |
@@ -28,6 +31,10 @@ Market Radar never holds money. The NEAR Intents deposit address forwards your c
 | 3 | Step 2: paste any valid address for the network shown (for testing, `0x52908400098527886E0F7030069857D2E4169EE7`) and tick the box. | The box can't be ticked until the address fits the network. Step 3 shows **live NEAR Intents prices** for delivering exactly $50 of USDC there, paid in 10 different coins (for example "0.0246 ETH", "14.05 NEAR"). Routes with a current minimum say so ("min $100"). |
 | 4 | Step 3: pick **ETH on Ethereum**. Step 4: paste an Ethereum address for refunds. Tap **Get payment details**. | A real NEAR Intents deposit address with a QR code, the exact ETH to send, and "about 51 seconds later, $50 USDC arrives in your Polymarket account on Polygon". Status updates on its own every 6 s. **Nothing is sent unless you send it.** |
 | 5 | Try `Arsenal`, `Nigeria election 2027` or `Fed rate cut`. | Sports and elections are matched across venues too. When no venue lists the same question, no comparison is shown rather than a wrong one. |
+| 6 | Search `bitcoin 100k` or `Chelsea vs Leeds`. | Besides the venues, a **Radar Pools · NEAR · testnet only** card shows the same question on our own NEAR contract, with each outcome's share of the pot. Tap **Try it on testnet →**. |
+| 7 | In **Testnet** mode (header switch), tap **Get $100 test dollars**. | Your balance shows $100 after about 5 s. It's held for your browser's key in the contract (`get_balance`). |
+| 8 | On **Liverpool vs Manchester United**, tap **Draw**, pick **$10** and **Bet $10 on Draw**. | The pot grows by $10, the percentages move, and the card shows *you: $10*. |
+| 9 | On the **⚡ Quick round** ("Bitcoin in 2 minutes: above $73,577.33 at 01:57 UTC?"), bet on **Higher** or **Not higher**, then wait for the countdown. | About 30–60 s after it closes, the round settles from Coinbase's public 1-minute BTC-USD price: "Coinbase BTC-USD price at 01:57 UTC: $73,571.23 (not above $73,577.33)", with a source link. Winnings are paid into your balance automatically and a new round opens. |
 
 Prediction markets are not legal everywhere. Check before funding a venue.
 
@@ -54,7 +61,18 @@ Prediction markets are not legal everywhere. Check before funding a venue.
 | Kalshi | the network the user picks on Kalshi's deposit screen: Solana, Base, Ethereum, Polygon or Arbitrum | matching `nep141:…` USDC asset |
 | Manifold | not funded (play money, shown as a crowd signal only) | |
 
-**NEAR features used:** NEAR Intents 1Click API for cross-chain settlement, with NEAR and USDC on NEAR as payment options.
+**Radar Pools** (`contracts/pools`, Rust, near-sdk 5; 13 unit tests)
+- **Markets** have 2 or 3 outcomes, a closing time, one pool per outcome and a status (`Open`, `Resolved` or `Cancelled`).
+- **Money in:** NEP-141 `ft_transfer_call` with `{"owner": ...}` credits an internal balance. On mainnet this is exactly how a NEAR Intents swap would deposit; on testnet a test dollar (`tusd.mradar-mwcw3x85.testnet`) stands in.
+- **Owners** are NEAR accounts (`bet`, `withdraw`) or ed25519 keys. A key signs `{contract}|radar-pools|{owner}|nonce:{n}|{action}`, and anyone can submit it with `bet_signed`. The per-owner nonce makes every signature single-use, and nobody can bet another owner's balance.
+- **Payout** = winning stake × whole pot ÷ winning pool. Anyone can call `claim`, but the money only goes to the position's owner. If the winning outcome has no backers, or the operator cancels, every stake is refunded.
+- **Results** are posted by a named operator (`ops.mradar-mwcw3x85.testnet`) with a note and a source link. Quick rounds are settled from Coinbase's public 1-minute candle at the closing minute; matches from official results.
+- **Relay** `web/api/pools.ts`: free test dollars (only when the balance is under $10), relays signed bets after checking the signature, claims, and opens and settles the 2-minute rounds.
+- **Seeding:** pools open with $100 of test money split by the odds on Kalshi and Polymarket at deploy time (`contracts/scripts/deploy.mjs`).
+
+**NEAR features used:**
+- **Radar Pools:** a NEAR smart contract (pool betting, NEP-141 deposits, ed25519-signed bets relayed for players without a wallet).
+- **Funding real venues:** NEAR Intents 1Click API for cross-chain settlement, with NEAR and USDC on NEAR as payment options.
 
 ## Run it yourself
 
@@ -65,12 +83,28 @@ npm run dev            # http://localhost:5173; serves /api/scout from the same 
 npx tsc --noEmit -p .  # type-check
 ```
 
-No keys or secrets are needed: every API used is public. To deploy on Vercel, import the repository and set **Root Directory** to `web` (Vite preset).
+Searching and funding need no keys or secrets: every API they use is public. The Radar Pools relay needs the operator account in `web/.env.local` (`OPS_ACCOUNT_ID`, `OPS_PRIVATE_KEY`).
+
+To deploy on Vercel, import the repository, set **Root Directory** to `web` (Vite preset), and add those two environment variables.
+
+Radar Pools contracts:
+
+```bash
+cd contracts/pools && cargo test            # 13 tests: pro-rata payouts, 3 outcomes, refunds, replay, wrong key, closing time, operator only
+cargo near build non-reproducible-wasm
+cd ../test-token && cargo near build non-reproducible-wasm
+cd ../scripts && npm install
+node deploy.mjs <funded-testnet-account-key.json> <dir-for-new-keys>   # tusd, ops, pools + 7 seeded markets
+```
 
 ## Repository layout
 
 ```
+contracts/pools/      Radar Pools prediction market contract (new)
+contracts/test-token/ tUSD test dollar (standard NEP-141, testnet only)
+contracts/scripts/    deploy + seed markets
 web/                  NEAR HACKATHON app (new)
+  api/pools.ts        Radar Pools relay: test dollars, signed bets, claims, 2-minute rounds
   api/scout.ts        search + same-question comparison (Vercel function)
   api/_venues.ts      copy of src/venues.ts (npm run sync-venues keeps it identical)
   src/App.tsx         search, comparison, 4-step funding
@@ -83,12 +117,14 @@ src/                  Market Radar PayBox plugin (pre-hackathon baseline, see be
 - **Mainnet only, by nature.** NEAR Intents has no testnet (hackathon FAQ Q-007). The app shows real quotes and real deposit addresses, but no end-to-end payment into a venue was made during the hackathon.
 - **Deposit addresses come from the user.** Market Radar can't look them up. The app checks the address format and asks the user to confirm the token and network their venue shows, because venues change these.
 - **Matching is heuristic.** Venues word the same question differently (for example "hit $150k" and "be above $149,999.99 by Dec 31"). The app tells users to check each venue's exact rules before betting.
+- **Radar Pools is testnet only, and its results are trusted.** A named operator posts each result with its source. A decentralised oracle and a challenge window are on the roadmap. The 2-minute rounds depend on Coinbase's public price API.
+- **Pool prices move.** In pool betting, the final payout depends on bets placed after yours. The app shows the payout "as the pools stand now".
 - **Some routes have minimums.** For example, USDT on Tron currently needs $100 or more. The app shows the minimum instead of failing.
 
 ## Disclosure
 
 - **Pre-hackathon baseline (not judged).** Market Radar started as a [PayBox](https://paybox.sh) plugin for AI agents, written on 2026-10-17 to 2026-10-19 for the MoonPay hackathon. It's frozen in the [`pre-hackathon`](https://github.com/Bellickkruz/market-radar/tree/pre-hackathon) branch. The section [Market Radar PayBox plugin](#market-radar-paybox-plugin-pre-hackathon) below describes it.
-- **Built during NEAR HACKATHON:** everything under `web/`, which is the NEAR Intents funding flow, the same-question comparison, the web interface and the search API. See the [diff from the baseline](https://github.com/Bellickkruz/market-radar/compare/pre-hackathon...main). `web/api/_venues.ts` is a copy of the baseline's venue adapters, reused as a library (FAQ Q-005).
+- **Built during NEAR HACKATHON:** everything under `web/` (the NEAR Intents funding flow, the same-question comparison, the web interface and the search API) and `contracts/` (Radar Pools and its test token). See the [diff from the baseline](https://github.com/Bellickkruz/market-radar/compare/pre-hackathon...main). `web/api/_venues.ts` is a copy of the baseline's venue adapters, reused as a library (FAQ Q-005).
 - **Second project.** The author also submits [PayPact](https://github.com/Bellickkruz/paypact). The two share no code.
 - **AI assistance.** The code was written with Claude Code (Anthropic) as a pair programmer, directed and tested by the author.
 - **Libraries:** `react` 19, `vite` 8, `qrcode`, TypeScript.

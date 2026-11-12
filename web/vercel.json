@@ -1,1 +1,10 @@
-{ "functions": { "api/scout.ts": { "maxDuration": 30 } } }
+{
+  "functions": {
+    "api/scout.ts": {
+      "maxDuration": 30
+    },
+    "api/pools.ts": {
+      "maxDuration": 60
+    }
+  }
+}
