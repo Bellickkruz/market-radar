@@ -5,6 +5,9 @@
     },
     "api/pools.ts": {
       "maxDuration": 60
+    },
+    "api/board.ts": {
+      "maxDuration": 30
     }
   }
 }

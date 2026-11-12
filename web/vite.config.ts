@@ -13,6 +13,13 @@ function devApi(): Plugin {
         res.setHeader("content-type", "application/json");
         res.end(await response.text());
       });
+      server.middlewares.use("/api/board", async (_req, res) => {
+        const { GET } = await server.ssrLoadModule("/api/board.ts");
+        const response: Response = await GET();
+        res.statusCode = response.status;
+        res.setHeader("content-type", "application/json");
+        res.end(await response.text());
+      });
       server.middlewares.use("/api/pools", async (req, res) => {
         const chunks: Buffer[] = [];
         for await (const c of req) chunks.push(c as Buffer);
