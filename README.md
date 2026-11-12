@@ -2,7 +2,7 @@
 
 **Find the best odds on any prediction market. Fund it from any coin, through NEAR Intents. And when you want to try one on NEAR itself, Radar Pools is our own prediction market contract on NEAR testnet.**
 
-- **Live app (NEAR HACKATHON entry):** _deploying; link added here once live_
+- **Live app (NEAR HACKATHON entry):** https://market-radar-taupe.vercel.app (Radar Pools: switch the header to **Testnet**, or https://market-radar-taupe.vercel.app/?net=testnet)
 - **What was built for NEAR HACKATHON:** the `web/` app, compared with the pre-hackathon baseline in [`pre-hackathon...main`](https://github.com/Bellickkruz/market-radar/compare/pre-hackathon...main) (see [Disclosure](#disclosure))
 - **Radar Pools contract (NEAR testnet):** [`pools.mradar-mwcw3x85.testnet`](https://testnet.nearblocks.io/address/pools.mradar-mwcw3x85.testnet)
 - **Tracks:** `defi` (a prediction market on NEAR, plus cross-chain settlement through NEAR Intents), `realworld` (stablecoin payments for consumers)
@@ -26,7 +26,7 @@ Market Radar never holds money. The NEAR Intents deposit address forwards your c
 
 | # | Do | See |
 |---|----|-----|
-| 1 | Open the live app and tap the example **"Bitcoin above 150k"**, or type `bitcoin 100k`. | Results from Polymarket, Kalshi, Limitless and Manifold in about 2 s. A **📡 Same question on 3 venues** card shows Kalshi, Polymarket and Manifold side by side, with *cheapest* labels and the price gap in cents. |
+| 1 | Open https://market-radar-taupe.vercel.app and tap the example **"Bitcoin above 150k"**, or type `bitcoin 100k`. | Results from Polymarket, Kalshi, Limitless and Manifold in about 2 s. A **📡 Same question on 3 venues** card shows Kalshi, Polymarket and Manifold side by side, with *cheapest* labels and the price gap in cents. |
 | 2 | Tap the YES price marked **cheapest**. | A 4-step funding panel opens. Step 1 shows how many shares $50 buys and what they pay if YES wins. |
 | 3 | Step 2: paste any valid address for the network shown (for testing, `0x52908400098527886E0F7030069857D2E4169EE7`) and tick the box. | The box can't be ticked until the address fits the network. Step 3 shows **live NEAR Intents prices** for delivering exactly $50 of USDC there, paid in 10 different coins (for example "0.0246 ETH", "14.05 NEAR"). Routes with a current minimum say so ("min $100"). |
 | 4 | Step 3: pick **ETH on Ethereum**. Step 4: paste an Ethereum address for refunds. Tap **Get payment details**. | A real NEAR Intents deposit address with a QR code, the exact ETH to send, and "about 51 seconds later, $50 USDC arrives in your Polymarket account on Polygon". Status updates on its own every 6 s. **Nothing is sent unless you send it.** |
