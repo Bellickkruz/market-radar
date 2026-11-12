@@ -1,6 +1,6 @@
 # Market Radar 🛰️
 
-**Find the best odds on any prediction market. Fund it from any coin, through NEAR Intents. And when you want to try one on NEAR itself, Radar Pools is our own prediction market contract on NEAR testnet.**
+**Market Radar is a prediction market aggregator.** Type the market you're looking for and it searches Polymarket, Kalshi, Limitless and Manifold at once, so you don't have to visit each one to find who lists it. **Find the best odds on any prediction market. Fund it from any coin, through NEAR Intents. And when you want to try one on NEAR itself, Radar Pools is our own prediction market contract on NEAR testnet.**
 
 - **Live app (NEAR HACKATHON entry):** https://market-radar-taupe.vercel.app (Radar Pools: switch the header to **Testnet**, or https://market-radar-taupe.vercel.app/?net=testnet)
 - **What was built for NEAR HACKATHON:** the `web/` app, compared with the pre-hackathon baseline in [`pre-hackathon...main`](https://github.com/Bellickkruz/market-radar/compare/pre-hackathon...main) (see [Disclosure](#disclosure))

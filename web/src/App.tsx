@@ -101,7 +101,7 @@ export function App() {
         {net === "testnet" ? <Pools focus={focus} /> : <>
         <section className={`top ${result || busy ? "compact" : ""}`}>
           <div className="top-text">
-            <span className="eyebrow">Prediction-market radar · powered by NEAR Intents</span>
+            <span className="eyebrow">Prediction market aggregator · powered by NEAR Intents</span>
             {!result && !busy && (
               <>
                 <h1>Every prediction market.<br /><span className="accent">One radar.</span></h1>
