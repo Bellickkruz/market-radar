@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#ffffff" />
+    <script>
+      // Light by default; apply a saved dark choice before paint so it never flashes.
+      try {
+        if (localStorage.getItem("mr:theme") === "dark") document.documentElement.dataset.theme = "dark";
+      } catch (e) {}
+    </script>
+    <title>Market Radar: best odds on any prediction market, funded from any coin</title>
+    <meta name="description" content="One search across Polymarket, Kalshi, Limitless and Manifold. Fund the venue with the best price from any coin through NEAR Intents." />
+    <meta property="og:title" content="Market Radar on NEAR" />
+    <meta property="og:description" content="Find the best odds on any prediction market. Fund it from any coin, through NEAR Intents." />
+    <link rel="icon" href="/radar.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
