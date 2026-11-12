@@ -114,6 +114,18 @@ async function btcAt(closeMs: number): Promise<number | null> {
 
 const fmtUsd = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+/** The operator seeds every new round from its own balance in the pools; top it up with test dollars when low. */
+async function refillSeedMoney() {
+  const o = ops();
+  const balance = BigInt(await view<string>("get_balance", { owner: o.accountId }));
+  if (balance >= 100n * D) return;
+  await o.callFunction({ contractId: POOLS_TOKEN, methodName: "mint", args: { account_id: o.accountId, amount: String(5000n * D) }, gas: 30n * TGAS, waitUntil: FAST });
+  await o.callFunction({
+    contractId: POOLS_TOKEN, methodName: "ft_transfer_call", deposit: 1n, gas: 100n * TGAS, waitUntil: FAST,
+    args: { receiver_id: POOLS_CONTRACT, amount: String(5000n * D), msg: JSON.stringify({ owner: o.accountId }) },
+  });
+}
+
 /** Settle quick rounds that have closed, and open a new one when none is running. */
 async function flash() {
   // Only open markets matter here, however many rounds have been played.
@@ -158,6 +170,7 @@ async function flash() {
     }).catch(() => null);
     if (id != null) {
       created = String(id);
+      await refillSeedMoney();
       // Seed both sides so the first player sees a real price.
       for (const outcome of [0, 1]) await call("bet", { market_id: created, outcome, amount: String(10n * D) }, 30n);
     }
