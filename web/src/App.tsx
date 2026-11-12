@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { Pools } from "./Pools";
 import { Board, PoolsPanel, Radar, Rates } from "./Overview";
 import {
-  DESTINATIONS, ORIGINS, USDC_CONTRACT, friendlyAmount, looksLikeAddress, quote, swapStatus,
+  DESTINATIONS, ORIGINS, OUR_FEE_PCT, USDC_CONTRACT, friendlyAmount, looksLikeAddress, quote, signupUrl, swapStatus,
   type Chain, type Destination, type Origin, type Quote, type SwapStatus,
 } from "./lib/intents";
 
@@ -355,7 +355,7 @@ function Fund({ market, side, dest }: { market: Market; side: Side; dest: Destin
           <label>Your {dest.name} deposit address</label>
           <p className="hint" style={{ marginTop: 0 }}>{dest.howTo}</p>
           <p className="signup">
-            New to {dest.name}? <a href={dest.signup.url} target="_blank" rel="noreferrer">Create an account on {dest.name} ↗</a>, then come back and paste your deposit address here.
+            New to {dest.name}? <a href={signupUrl(dest.venue, dest.signup.url)} target="_blank" rel="noreferrer">Create an account on {dest.name} ↗</a>, then come back and paste your deposit address here.
             <span className="muted"> {dest.signup.note}</span>
           </p>
           {dest.chains.length > 1 && (
@@ -385,7 +385,7 @@ function Fund({ market, side, dest }: { market: Market; side: Side; dest: Destin
               </button>
             ))}
           </div>
-          <p className="hint">Live NEAR Intents prices for delivering exactly {amountOk ? money(amount) : "your amount"} USDC on {chain}, all fees included.</p>
+          <p className="hint">Live NEAR Intents prices for delivering exactly {amountOk ? money(amount) : "your amount"} USDC on {chain}. All fees included: the NEAR Intents swap and Market Radar's {OUR_FEE_PCT}% service fee.</p>
         </div>
       </div>
 

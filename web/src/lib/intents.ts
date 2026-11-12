@@ -5,6 +5,29 @@
 
 const API = "https://1click.chaindefuser.com/v0";
 
+/**
+ * Market Radar's revenue on funding: an app fee collected by NEAR Intents on each swap and
+ * paid to Market Radar's NEAR account. 1Click shares app fees 50/50 and drops its own 0.2%
+ * base fee, so at 50 bps the user pays ~0.3% more than without Market Radar, Market Radar
+ * receives 0.25%, and the venue account still receives the exact USDC amount.
+ */
+export const FEE_RECIPIENT = import.meta.env.VITE_APP_FEE_RECIPIENT || "bellickkruz.near";
+export const FEE_BPS = Number(import.meta.env.VITE_APP_FEE_BPS ?? 50);
+/** The share that reaches Market Radar, in percent (1Click keeps the other half). */
+export const OUR_FEE_PCT = FEE_BPS / 2 / 100;
+
+/**
+ * Venue referral links: when set, "Create an account" sends new users through Market Radar's
+ * referral link, so the venue's referral programme credits Market Radar. Paste the link the
+ * venue gives you into the matching env var (empty = the venue's normal sign-up page).
+ */
+const REFERRALS: Record<string, string | undefined> = {
+  polymarket: import.meta.env.VITE_REF_POLYMARKET,
+  kalshi: import.meta.env.VITE_REF_KALSHI,
+  limitless: import.meta.env.VITE_REF_LIMITLESS,
+};
+export const signupUrl = (venue: string, fallback: string) => REFERRALS[venue] || fallback;
+
 export type Chain = "Polygon" | "Base" | "Solana" | "Ethereum" | "Arbitrum" | "Tron" | "Bitcoin" | "NEAR";
 
 /** USDC delivered on each chain a venue may take deposits on. All 6 decimals. */
@@ -139,6 +162,7 @@ export async function quote(p: {
       refundType: "ORIGIN_CHAIN",
       deadline: new Date(Date.now() + 30 * 60_000).toISOString(),
       referral: "market-radar",
+      ...(FEE_BPS > 0 ? { appFees: [{ recipient: FEE_RECIPIENT, fee: FEE_BPS }] } : {}),
     }),
   });
   const json = await res.json().catch(() => ({}));

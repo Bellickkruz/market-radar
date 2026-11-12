@@ -122,6 +122,17 @@ src/                  Market Radar PayBox plugin (pre-hackathon baseline, see be
 - **Pool prices move.** In pool betting, the final payout depends on bets placed after yours. The app shows the payout "as the pools stand now".
 - **Some routes have minimums.** For example, USDT on Tron currently needs $100 or more. The app shows the minimum instead of failing.
 
+## Business model
+
+| Revenue stream | Status | How it works |
+|---|---|---|
+| **Funding fee** | **Live on mainnet** | Every "fund this venue" swap carries a 0.5% NEAR Intents app fee (`appFees`, `web/src/lib/intents.ts`). 1Click splits app fees 50/50 and drops its own 0.2% base fee, so the user pays about 0.3% more than without Market Radar, **0.25% goes to `bellickkruz.near`**, and the venue account still receives the exact USDC amount. The fee is included in every price shown before the user sends anything. Example: funding $100 into Polymarket costs ≈ $101.57 in ETH instead of ≈ $101.13, and Market Radar earns $0.25. |
+| **Venue referrals** | Built, waiting for codes | "Create an account on Polymarket / Kalshi / Limitless" links can carry Market Radar's referral link (`VITE_REF_POLYMARKET`, `VITE_REF_KALSHI`, `VITE_REF_LIMITLESS`), so venue referral programmes credit Market Radar for the users it sends. The links are switched on as soon as each programme's referral URL is added. |
+| **Radar Pools house fee** | Roadmap (mainnet) | A small cut (about 2%) of each settled pool, taken by the contract. It comes only with a licensed mainnet launch. |
+| **Premium tools** | Roadmap | Paid price-gap alerts, and an API for traders and AI agents. |
+
+The aggregator itself (search, comparison, price-gap board) stays free: it's what brings users to the paid funding step.
+
 ## Roadmap
 
 - **Bet without leaving Market Radar.** Today the user opens an account and places the bet on the venue itself (Market Radar links there and handles the funding). Next, the user connects their own venue wallet and Market Radar places the order for them, signed by that wallet. Polymarket supports this for third-party apps through its order API and builder programme; it needs Polymarket's approval and careful key handling, so it was out of scope for the hackathon.
