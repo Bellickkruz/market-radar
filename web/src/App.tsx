@@ -206,16 +206,7 @@ function Results({ result, picked, onPick, onPool }: { result: SearchResult; pic
         <article className="card compare">
           <div className="row" style={{ justifyContent: "space-between" }}>
             <b>📡 Same question on {group.length} venues</b>
-            {c.spread_cents > 0 && (
-              <span className="row" style={{ gap: 6 }}>
-                <span className="pill pill-plain">{c.spread_cents}¢ price gap</span>
-                {c.net_gap_cents != null && (
-                  <span className={`pill ${c.net_gap_cents > 0 ? "pill-good" : "pill-warn"}`} title="What you save per contract after each venue's trading fee and the cost of moving USDC there">
-                    {c.net_gap_cents > 0 ? `${c.net_gap_cents}¢ after fees` : "fees eat this gap"}
-                  </span>
-                )}
-              </span>
-            )}
+            {c.spread_cents > 0 && <Saving c={c} names={group} />}
           </div>
           <h3 className="mtitle">{c.question}</h3>
           <div className="cmp-rows">
@@ -231,8 +222,7 @@ function Results({ result, picked, onPick, onPool }: { result: SearchResult; pic
             ))}
           </div>
           <p className="hint">
-            <b>All-in</b> = YES price + the venue's trading fee + moving ${c.fund_amount ?? 100} of USDC there through NEAR Intents (live quote, all fees in), per contract.
-            {" "}<b>Same question doesn't always mean same rules:</b> venues can settle on different sources or deadlines, so open each one and read its rules before betting. Manifold is play money.
+            Real cost = the price + the site's fee + the cost of sending your money there. Two sites can judge the same question differently, so read each site's rules before you bet.
           </p>
           {pickedInGroup && <Fund key={picked!.market.market_ref + picked!.side} market={picked!.market} side={picked!.side} dest={DESTINATIONS[picked!.market.venue as Destination["venue"]]} />}
         </article>
@@ -283,14 +273,22 @@ function Results({ result, picked, onPick, onPool }: { result: SearchResult; pic
   );
 }
 
-/** One venue's all-in cost per YES contract: price + trading fee + moving money there. */
+/** The saving left after fees, in one plain sentence. */
+function Saving({ c, names }: { c: NonNullable<SearchResult["compare"]>; names: Market[] }) {
+  const net = c.net_gap_cents;
+  if (net == null) return <span className="pill pill-plain">{c.spread_cents}¢ price gap</span>;
+  if (net <= 0) return <span className="pill pill-warn">No real saving once fees are paid</span>;
+  const cheapest = [...(c.costs ?? [])].filter((x) => x.all_in_cents != null).sort((a, b) => a.all_in_cents! - b.all_in_cents!)[0];
+  const venue = names.find((m) => m.market_ref === cheapest?.ref)?.venue_name;
+  return <span className="pill">{venue ? `${net}¢ cheaper on ${venue}` : `${net}¢ cheaper`}, fees included</span>;
+}
+
+/** One venue's YES price once fees are added. The breakdown is there on tap/hover. */
 function AllIn({ cost }: { cost?: NonNullable<NonNullable<SearchResult["compare"]>["costs"]>[number] }) {
-  if (!cost) return null;
-  if (cost.all_in_cents == null) return <span className="allin muted small">All-in: fee not published</span>;
+  if (cost?.all_in_cents == null) return null;
   return (
-    <span className="allin small" title={`Price ${cost.price_cents}¢ + trading fee ${cost.fee_cents}¢ + moving USDC to ${cost.funding_chain} ${cost.funding_cents}¢`}>
-      All-in <b className="tnum">{cost.all_in_cents}¢</b>
-      <span className="muted"> · fee {cost.fee_cents}¢ · moving money {cost.funding_cents}¢</span>
+    <span className="allin small muted" title={`${cost.price_cents}¢ price + ${cost.fee_cents}¢ trading fee + ${cost.funding_cents}¢ to move money there`}>
+      Real cost of YES: <b className="tnum">{Math.round(cost.all_in_cents)}¢</b>
     </span>
   );
 }

@@ -95,7 +95,7 @@ export function Board({ onOpen }: { onOpen: (query: string, fundCheapest: boolea
       <header className="panel-head">
         <div>
           <h2>Price gaps right now</h2>
-          <p className="muted small">The same question, priced by each venue. YES price in cents; cheapest real-money venue highlighted.</p>
+          <p className="muted small">The same question on different sites. Price of YES in cents; the cheapest is highlighted.</p>
         </div>
         <span className="live-dot">{updated ? `Live · ${new Date(updated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Live"}</span>
       </header>
@@ -104,7 +104,7 @@ export function Board({ onOpen }: { onOpen: (query: string, fundCheapest: boolea
         <div className="board-row head" role="row">
           <span role="columnheader">Question</span>
           {VENUE_COLS.map((v) => <span key={v.id} role="columnheader" className="tnum">{v.name}</span>)}
-          <span role="columnheader" className="tnum">Gap</span>
+          <span role="columnheader" className="tnum">Cheaper by</span>
           <span role="columnheader" />
         </div>
         {!rows && Array.from({ length: 5 }, (_, i) => <div key={i} className="board-row skeleton" style={{ animationDelay: `${i * 80}ms` }} />)}
@@ -122,16 +122,15 @@ export function Board({ onOpen }: { onOpen: (query: string, fundCheapest: boolea
                 </span>
               );
             })}
-            <span className="tnum gap" title="Raw price gap, then what's left after trading fees and moving money">
-              <b>{r.gap_cents}¢</b>
-              {r.net_gap_cents != null && <small className={`net ${r.net_gap_cents > 0 ? "" : "eaten"}`}>{r.net_gap_cents > 0 ? `${r.net_gap_cents}¢ net` : "fees eat it"}</small>}
+            <span className="tnum gap" title={`Price gap ${r.gap_cents}¢; after trading fees and moving money: ${r.net_gap_cents ?? "?"}¢`}>
+              {r.net_gap_cents == null ? <b>{r.gap_cents}¢</b> : r.net_gap_cents > 0 ? <b>{r.net_gap_cents}¢</b> : <small className="net eaten">no real saving</small>}
             </span>
             <button className="btn small fund-btn" onClick={() => onOpen(r.query, true)}>Fund cheapest</button>
           </div>
         ))}
       </div>
       <p className="hint">
-        <b>Net</b> = the gap left after each venue's trading fee and moving $100 of USDC there through NEAR Intents (live quote). Venues word questions differently and can settle them on different rules, so open them and check before betting. Manifold is play money, shown as a crowd signal.
+        "Cheaper by" already counts each site's fee and the cost of sending your money there. Two sites can judge the same question differently, so read the rules before you bet. Manifold is play money.
       </p>
     </section>
   );
