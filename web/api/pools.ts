@@ -101,14 +101,20 @@ async function spotBtc(): Promise<number> {
 }
 
 /** Coinbase's BTC-USD price at the close of the 1-minute candle ending at `closeMs`, if published yet. */
+// Asking for the exact one-minute window again and again can keep returning a cached empty
+// answer for minutes, so ask for a window that ends at the current minute (a new URL each
+// minute, never in the future) and pick the candle out of it.
 async function btcAt(closeMs: number): Promise<number | null> {
-  const start = new Date(closeMs - 60_000).toISOString(), end = new Date(closeMs).toISOString();
+  const nowMin = Math.floor(Date.now() / 60_000) * 60_000;
+  const start = new Date(closeMs - 5 * 60_000).toISOString();
+  const end = new Date(Math.max(closeMs, Math.min(nowMin, closeMs + 30 * 60_000))).toISOString();
   const r = await fetch(`https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=60&start=${start}&end=${end}`, {
-    headers: { "user-agent": "market-radar" },
+    headers: { "user-agent": "market-radar", "cache-control": "no-cache" },
+    cache: "no-store",
   });
   if (!r.ok) return null;
   const candles = (await r.json()) as number[][]; // [time, low, high, open, close, volume]
-  const c = candles.find((x) => x[0] * 1000 === closeMs - 60_000);
+  const c = Array.isArray(candles) ? candles.find((x) => x[0] * 1000 === closeMs - 60_000) : undefined;
   return c ? c[4] : null;
 }
 
@@ -133,10 +139,11 @@ async function flash() {
   const now = Date.now();
   const rounds = markets.filter((m) => m.category === "flash");
   const settled: string[] = [];
+  const waiting: { id: string; why: string }[] = [];
   for (const m of rounds.filter((r) => r.status === "Open" && Number(BigInt(r.closes_at) / 1_000_000n) <= now)) {
     const closeMs = Number(BigInt(m.closes_at) / 1_000_000n);
     const price = await btcAt(closeMs);
-    if (price == null) continue; // not published yet; the next poll settles it
+    if (price == null) { waiting.push({ id: m.id, why: "price not published yet" }); continue; } // the next poll settles it
     const threshold = Number(m.title.slice(FLASH_PREFIX.length).replace(/[,?]/g, "").split(" ")[0]);
     const winner = price > threshold ? 0 : 1;
     const at = new Date(closeMs).toISOString().slice(11, 16);
@@ -145,7 +152,7 @@ async function flash() {
       market_id: m.id, winner,
       resolution: `Coinbase BTC-USD price at ${at} UTC: ${fmtUsd(price)} (${winner === 0 ? "above" : "not above"} ${fmtUsd(threshold)})`,
       source: `https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=60&start=${new Date(closeMs - 60_000).toISOString()}&end=${new Date(closeMs).toISOString()}`,
-    }).then(() => true, () => false);
+    }).then(() => true, (e) => { waiting.push({ id: m.id, why: errText(e) }); return false; });
     if (ok) settled.push(m.id);
   }
   const runningIn = (ms: Market[]) =>
@@ -175,7 +182,7 @@ async function flash() {
       for (const outcome of [0, 1]) await call("bet", { market_id: created, outcome, amount: String(10n * D) }, 30n);
     }
   }
-  return json(200, { settled, created });
+  return json(200, { settled, created, waiting });
 }
 
 // ---------------------------------------------------------------- entry
