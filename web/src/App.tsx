@@ -205,7 +205,7 @@ function Results({ result, picked, onPick, onPool }: { result: SearchResult; pic
       {c && (
         <article className="card compare">
           <div className="row" style={{ justifyContent: "space-between" }}>
-            <b>📡 Same question on {group.length} venues</b>
+            <b>📡 Same question on {group.length} sites</b>
             {c.spread_cents > 0 && <Saving c={c} names={group} />}
           </div>
           <h3 className="mtitle">{c.question}</h3>
